@@ -102,20 +102,6 @@
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="writegraph_checkBox">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QCheckBox" name="plotgraph_checkBox">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-        <item>
          <widget class="QCheckBox" name="verbose_checkBox">
           <property name="text">
            <string>ログ出力</string>
@@ -543,15 +529,15 @@ color: rgb(255, 255, 255);</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>10</x>
+      <x>39</x>
       <y>8</y>
-      <width>600</width>
+      <width>571</width>
       <height>20</height>
      </rect>
     </property>
     <property name="minimumSize">
      <size>
-      <width>600</width>
+      <width>500</width>
       <height>0</height>
      </size>
     </property>
@@ -561,11 +547,17 @@ color: rgb(255, 255, 255);</string>
       <height>16777215</height>
      </size>
     </property>
+    <property name="text">
+     <string/>
+    </property>
     <property name="frame">
      <bool>true</bool>
     </property>
     <property name="readOnly">
      <bool>true</bool>
+    </property>
+    <property name="placeholderText">
+     <string/>
     </property>
    </widget>
    <widget class="QWidget" name="layoutWidget">
@@ -624,6 +616,20 @@ color: rgb(255, 255, 255);</string>
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="previousvideoButton">
+       <property name="toolTip">
+        <string>前のビデオ</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="video_detect.qrc">
+         <normaloff>:/newPrefix/leftarrow114.png</normaloff>:/newPrefix/leftarrow114.png</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="playButton">
        <property name="minimumSize">
         <size>
@@ -649,24 +655,9 @@ color: rgb(255, 255, 255);</string>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="nextframeButton">
-       <property name="toolTip">
-        <string>next frame and stop</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="icon">
-        <iconset>
-         <normalon>:/newPrefix/pause button4.png</normalon>
-        </iconset>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="nextvideoButton">
        <property name="toolTip">
-        <string>next video</string>
+        <string>次のビデオ</string>
        </property>
        <property name="text">
         <string/>
@@ -689,6 +680,21 @@ color: rgb(255, 255, 255);</string>
         </size>
        </property>
       </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="nextframeButton">
+       <property name="toolTip">
+        <string>コマ送り</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset>
+         <normalon>:/newPrefix/pause button4.png</normalon>
+        </iconset>
+       </property>
+      </widget>
      </item>
      <item>
       <widget class="QLabel" name="label_2">
@@ -732,6 +738,19 @@ color: rgb(255, 255, 255);</string>
       <normaloff>:/newPrefix/folder265.png</normaloff>:/newPrefix/folder265.png</iconset>
     </property>
    </widget>
+   <widget class="QLabel" name="label_7">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>31</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>入力 </string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -749,6 +768,7 @@ color: rgb(255, 255, 255);</string>
     <addaction name="actionOpen_Folder"/>
     <addaction name="actionWebCam"/>
     <addaction name="separator"/>
+    <addaction name="actionLoad_Settings"/>
     <addaction name="actionSave_Settings"/>
     <addaction name="separator"/>
     <addaction name="actionQuit"/>
@@ -773,7 +793,18 @@ color: rgb(255, 255, 255);</string>
   </action>
   <action name="actionSave_Settings">
    <property name="text">
-    <string>設定を保存</string>
+    <string>設定を保存...</string>
+   </property>
+   <property name="iconText">
+    <string>設定を保存...</string>
+   </property>
+   <property name="toolTip">
+    <string>設定を保存...</string>
+   </property>
+  </action>
+  <action name="actionLoad_Settings">
+   <property name="text">
+    <string>設定を読込み...</string>
    </property>
   </action>
  </widget>
