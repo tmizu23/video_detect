@@ -43,7 +43,7 @@ from PyQt4 import QtGui, QtCore
 from View import MainView
 from Settei import Settei
 from Video import Video
-
+from MyUtil import find_initdir
 
 class MainController():
     u"""処理クラス."""
@@ -62,7 +62,7 @@ class MainController():
         self.mouseselectmode = False
 
         u"""設定の読み込み."""
-        inidir = os.path.abspath(os.path.dirname(__file__))
+        inidir = os.path.abspath(find_initdir())
         setting_file = join(inidir, "settings.json")
         self.load_settings(setting_file)
         # GUIのアクション設定（設定読み込みの後に実行）
@@ -98,6 +98,9 @@ class MainController():
             self.set_bounding)
         self.main_view.display_checkBox.stateChanged.connect(self.set_display)
         self.main_view.verbose_checkBox.stateChanged.connect(self.set_verbose)
+        self.main_view.detectA_radioButton.clicked.connect(self.set_detectA)
+        self.main_view.detectB_radioButton.clicked.connect(self.set_detectB)
+        self.main_view.detectC_radioButton.clicked.connect(self.set_detectC)
         self.main_view.avi_checkBox.stateChanged.connect(self.set_inputformat)
         self.main_view.mov_checkBox.stateChanged.connect(self.set_inputformat)
         self.main_view.mpg_checkBox.stateChanged.connect(self.set_inputformat)
@@ -106,6 +109,8 @@ class MainController():
         self.main_view.flv_checkBox.stateChanged.connect(self.set_inputformat)
         self.main_view.mts_checkBox.stateChanged.connect(self.set_inputformat)
         self.main_view.m2ts_checkBox.stateChanged.connect(self.set_inputformat)
+        self.main_view.resetArea_Button.clicked.connect(
+            self.reset_detectarea)
         self.main_view.detectionTop_Edit.editingFinished.connect(
             self.check_detectionarea)
         self.main_view.detectionBottom_Edit.editingFinished.connect(
@@ -119,24 +124,38 @@ class MainController():
         self.main_view.videoFrame.mousePressEvent = self.set_detectionarea_by_mouse
         self.main_view.videoFrame.mouseReleaseEvent = self.set_detectionarea_by_mouse
         self.main_view.videoFrame.mouseMoveEvent = self.set_detectionarea_by_mouse
+        self.main_view.keyPressEvent = self.set_label
+        self.main_view.imgscale_comboBox.currentIndexChanged.connect(self.set_imgscale)
+
+    def set_label(self,event):
+        key = event.key()
+        if key == QtCore.Qt.Key_1:#いる
+            self.video.set_label(1)
+        elif key == QtCore.Qt.Key_0:#いない
+            self.video.set_label(0)
+        elif key == QtCore.Qt.Key_2:#いるけど、うごかない
+            self.video.set_label(2)
 
     def play(self, singlestep=False):
         u"""再生＆表示＆検知処理.（タイマーからループで呼び出される）."""
+        # 初期学習
+        self.video.init_learning()
         # 1フレーム処理
-        ret = self.video.process_nextframe()
+        ret, skip = self.video.process_nextframe()
         if ret is True:
             curpos = self.video.get_position()
             self.main_view.set_track_position(curpos)
             # ビデオ終わりでなければビデオ＆jpg書き出しチェック＆画面表示
-            if self.settei.settings["writejpg"]:
-                self.video.writeout_jpg()
-            if self.settei.settings["writevideo"]:
-                self.video.writeout_video()
-            # if self.settei.settings["webcam"]:
-            #    self.video.writeout_webcam()
-            if self.settei.settings["display"]:
-                RGBframe = self.video.get_RGBframe()
-                self.main_view.set_frame(RGBframe)
+            if not skip:
+                if self.settei.settings["writejpg"]:
+                    self.video.writeout_jpg()
+                if self.settei.settings["writevideo"]:
+                    self.video.writeout_video()
+                # if self.settei.settings["webcam"]:
+                #    self.video.writeout_webcam()
+                if self.settei.settings["display"]:
+                    RGBframe = self.video.get_RGBframe()
+                    self.main_view.set_frame(RGBframe)
         else:
             # ビデオ終わりなら書き込み終了＆ログ出力＆グラフ出力
             self.video.close_video()
@@ -148,74 +167,76 @@ class MainController():
                 self.playnumber = self.playnumber + 1
                 filename = self.playlist[self.playnumber]
                 self.set_video(filename)
-                self.control_video("START")
+                if not singlestep:
+                   self.control_video("START")
             else:
                 # ファイル残っていなかったら停止
                 self.control_video("STOP")
-        # コマ送りの場合は停止
-        if singlestep:
-            self.control_video("STOP")
+
 
     def control_video(self, action):
         u"""ビデオ再生 or 停止処理."""
         print("main_ctr:control_video")
-        if(action == "START" and self.video is not None):
-            # 再生させる
-            self.pause = False
-            self.main_view.set_play_label("STOP")
-            self.main_view.set_format_checkbox(False)
-            self.main_view.set_mouseselect(False)
-            self.main_view.set_stepvideo_button(False)
-            self.main_view.set_treeview(False)
-            if not self.video.learned:
-                self.video.init_learning()
-            self._timer.start()
-        elif action == "STOP":
-            # 停止させる
-            self.pause = True
-            self._timer.stop()
-            if self.video is not None:
+        if self.video is not None:
+            if action == "START":
+                # 再生させる
+                self.pause = False
+                self.main_view.set_play_label("STOP")
+                self.main_view.set_format_checkbox(False)
+                self.main_view.set_stepvideo_button(False)
+                self.main_view.set_treeview(False)
+                self.main_view.set_settingframe(False)
+                self.video.set_detecttype(self.settei.settings["detecttype"])
+                self._timer.start()
+            elif action == "STOP":
+                # 停止させる
+                self.pause = True
+                self._timer.stop()
                 self.video.close_video()  # ビデオも一旦書き出し
-            self.main_view.set_play_label("START")
-            self.main_view.set_mouseselect(True)
-            if not self.settei.settings["webcam"]:
-                self.main_view.set_format_checkbox(True)
-                self.main_view.set_stepvideo_button(True)
-                self.main_view.set_treeview(True)
-        elif self.pause and self.video is not None:
-            # 停止していたら再生させる
-            self.pause = False
-            self.main_view.set_play_label("STOP")
-            self.main_view.set_format_checkbox(False)
-            self.main_view.set_mouseselect(False)
-            self.main_view.set_stepvideo_button(False)
-            self.main_view.set_treeview(False)
-            if not self.video.learned:
-                self.video.init_learning()
-            self._timer.start()
-        else:
-            # 再生していたら停止させる
-            self.pause = True
-            self._timer.stop()
-            self.video.close_video()  # ビデオも一旦書き出し
-            self.main_view.set_play_label("START")
-            self.main_view.set_mouseselect(True)
-            if not self.settei.settings["webcam"]:
-                self.main_view.set_format_checkbox(True)
-                self.main_view.set_stepvideo_button(True)
-                self.main_view.set_treeview(True)
+                self.main_view.set_play_label("START")
+                self.main_view.set_settingframe(True)
+                if not self.settei.settings["webcam"]:
+                    self.main_view.set_format_checkbox(True)
+                    self.main_view.set_stepvideo_button(True)
+                    self.main_view.set_treeview(True)
+            elif self.pause:
+                # 停止していたら再生させる
+                self.pause = False
+                self.main_view.set_play_label("STOP")
+                self.main_view.set_format_checkbox(False)
+                self.main_view.set_stepvideo_button(False)
+                self.main_view.set_treeview(False)
+                self.main_view.set_settingframe(False)
+                self.video.set_detecttype(self.settei.settings["detecttype"])
+                self._timer.start()
+            else:
+                # 再生していたら停止させる
+                self.pause = True
+                self._timer.stop()
+                self.video.close_video()  # ビデオも一旦書き出し
+                self.main_view.set_play_label("START")
+                self.main_view.set_settingframe(True)
+                if not self.settei.settings["webcam"]:
+                    self.main_view.set_format_checkbox(True)
+                    self.main_view.set_stepvideo_button(True)
+                    self.main_view.set_treeview(True)
 
     def step_nextframe(self):
         u"""コマ送り再生."""
-        self.play(singlestep=True)
+        #self.control_video("STOP")
+        if self.video is not None:
+            if self.video.bs is None:
+                self.video.set_detecttype(self.settei.settings["detecttype"])
+            self.play(singlestep=True)
 
     def step_previousvideo(self):
         u"""前のビデオに切り替え."""
-        # playnumberが0の場合は、同じビデオを初期設定する。
-        if self.playnumber > 0:
-            self.playnumber = self.playnumber - 1
-        filename = self.playlist[self.playnumber]
-        self.set_video(filename)
+        if len(self.playlist) > 0:
+            if self.playnumber > 0 and self.video.curpos==0:
+                self.playnumber = self.playnumber - 1
+            # playnumberが0の場合と再生途中の場合は、同じビデオを初期設定する。
+            filename = self.playlist[self.playnumber]
+            self.set_video(filename)
 
     def step_nextvideo(self):
         u"""次のビデオに切り替え."""
@@ -239,7 +260,7 @@ class MainController():
         print("main_ctr:slider_moved")
         pos = self.main_view.get_slider_position()
         self.video.set_position(pos)
-        self.play()
+        self.refresh_view()
 
     def set_outdir(self):
         u"""出力フォルダを設定."""
@@ -255,7 +276,8 @@ class MainController():
                 outdir = self.settei.settings["outdir"]
                 playdir = self.settei.settings["playdir"]
                 playfile = self.playfile
-                recursive_outdir = self.get_recursive_outdir(outdir, playdir, playfile)
+                recursive_outdir = self.get_recursive_outdir(
+                    outdir, playdir, playfile)
                 self.video.set_outdir(recursive_outdir)
 
     def select_playfile_treeview(self, index):
@@ -289,12 +311,11 @@ class MainController():
         u"""再生リストの設定."""
         print("main_ctr:set_playlist")
         playdir = self.settei.settings["playdir"]
-        playlist = self.main_view.get_playlist(playdir)
-        if len(playlist) == 0:
+        self.playlist = self.main_view.get_playlist(playdir)
+        if len(self.playlist) == 0:
             self.video = None
             self.main_view.set_nothing_playlist()
         else:
-            self.playlist = playlist
             self.playnumber = 0
             playfile = self.playlist[self.playnumber]
             self.playfile = playfile
@@ -302,7 +323,8 @@ class MainController():
 
     def get_recursive_outdir(self, outdir, playdir, playfile):
         u"""playfileのフォルダ構成を考慮したビデオ＆画像出力フォルダ."""
-        tmppath = outdir + os.sep + playfile.replace(playdir, "").lstrip('\\') #  playdirがG:\とかだとバックスラッシュが取れるためos.sep追加。取れない場合のために左のバックスラッシュを一旦とる。
+        tmppath = outdir + os.sep + playfile.replace(playdir, "").lstrip(
+            '\\')  # playdirがG:\とかだとバックスラッシュが取れるためos.sep追加。取れない場合のために左のバックスラッシュを一旦とる。
         recursive_outdir = os.path.dirname(str(tmppath))
         return recursive_outdir
 
@@ -313,22 +335,45 @@ class MainController():
         outdir = self.settei.settings["outdir"]
         playdir = self.settei.settings["playdir"]
         recursive_outdir = self.get_recursive_outdir(outdir, playdir, playfile)
-        self.video = Video(playfile, recursive_outdir)
+        logfunc = self.main_view.write_log
+        self.video = Video(playfile, recursive_outdir,logfunc)
         self.video.set_bounding(self.settei.settings["bounding"])
         self.video.set_verbose(self.settei.settings["verbose"])
+        self.video.set_detecttype(self.settei.settings["detecttype"])
         framecount = self.video.get_framecount()
         self.main_view.set_video_view(playfile, framecount)
-        self.video.attach(self.main_view.write_log)
         top = self.settei.settings["detectionTop"]
         bottom = self.settei.settings["detectionBottom"]
         left = self.settei.settings["detectionLeft"]
         right = self.settei.settings["detectionRight"]
         self.set_detectionarea(top, bottom, left, right)
+        self.set_imgscale()
         self.set_speed()
+
+    def reset_detectarea(self):
+        u"""検知範囲リセット."""
+        if self.video is not None:
+            height, width = self.video.get_size()
+            top = 0
+            bottom = height
+            left = 0
+            right = width
+            self.set_detectionarea(top, bottom, left, right)
+
+
+    def refresh_view(self):
+        u"""表示を更新する."""
+        if self.settei.settings["display"]:
+            bounding = self.settei.settings["bounding"]
+            currentframe = self.video.get_currentframe(bounding)
+            self.main_view.set_frame(currentframe)
+        else:
+            self.main_view.clear_display()
 
     def set_detectionarea(self, top, bottom, left, right):
         u"""検知範囲のビデオへの設定."""
         print("main_ctr:set_detectionarea")
+
         height, width = self.video.get_size()
         self.main_view.set_detectionarea(top, bottom, left, right, height)
         self.settei.settings["detectionTop"] = top
@@ -336,6 +381,7 @@ class MainController():
         self.settei.settings["detectionLeft"] = left
         self.settei.settings["detectionRight"] = right
         self.video.set_detectionarea(top, bottom, left, right)
+        self.refresh_view()
 
     def check_detectionarea(self):
         u"""検知エリアの確認."""
@@ -373,18 +419,21 @@ class MainController():
         self.video = None
         outdir = self.settei.settings["outdir"]
         playfile = self.playfile = device
-        self.video = Video(playfile, outdir, webcam=True)
+        logfunc = self.main_view.write_log
+        self.video = Video(playfile, outdir, logfunc, webcam=True)
         # webcamが接続されていれば初期設定
         if self.video.check_webcam() is True:
-            height, width = self.video.get_size()
-            top = 0
-            bottom = height
-            left = 0
-            right = width
-            self.set_detectionarea(top, bottom, left, right)
             self.video.set_bounding(self.settei.settings["bounding"])
             self.video.set_verbose(self.settei.settings["verbose"])
+            self.video.set_detecttype(self.settei.settings["detecttype"])
             self.main_view.set_webcam_view()
+            top = self.settei.settings["detectionTop"]
+            bottom = self.settei.settings["detectionBottom"]
+            left = self.settei.settings["detectionLeft"]
+            right = self.settei.settings["detectionRight"]
+            self.set_detectionarea(top, bottom, left, right)
+            self.set_imgscale()
+            self.set_speed()
             self.control_video("START")
         else:
             self.main_view.set_webcam_view(webcam=False)
@@ -406,6 +455,7 @@ class MainController():
             self.set_webcam(device)
         else:
             self.set_inputformat()
+
     def save_settings(self):
         u"""設定の保存."""
         print("main_ctr:save_settings")
@@ -416,14 +466,17 @@ class MainController():
     def set_speed(self):
         u"""タイマーのインターバルを設定."""
         print("main_ctr:set_speed")
-        speedvalue = self.main_view.get_speed()
-        # speed: 0～2 の値 0はできるだけ速く.2は通常の2倍の時間遅い
-        speed = -speedvalue / 50.0 + 2
-        self.settei.settings["speedSlider"] = speedvalue
-        fps = 0
-        if self.video is not None:
-            fps = self.video.get_fps()  # webcamは0になる
-        self._timer.setInterval(speed * fps)
+        if self.settei.settings["webcam"]:
+            interval = 0
+        else:
+            speedvalue = self.main_view.get_speed()
+            # speed: 0～2 の値 0はできるだけ速く.2は通常の2倍の時間遅い
+            speed = -speedvalue / 50.0 + 2
+            self.settei.settings["speedSlider"] = speedvalue
+            interval = 0
+            if self.video is not None:
+                interval = speed * self.video.get_fps()
+        self._timer.setInterval(interval)
 
     def set_bounding(self, bounding):
         u"""領域表示設定."""
@@ -432,6 +485,7 @@ class MainController():
         self.settei.settings["bounding"] = bounding
         if self.video is not None:
             self.video.set_bounding(bounding)
+        self.refresh_view()
 
     def set_writevideo(self, writevideo):
         u"""ビデオを書き出すか設定."""
@@ -453,6 +507,8 @@ class MainController():
         self.settei.settings["display"] = display
         if display is False:
             self.main_view.clear_display()
+        else:
+            self.refresh_view()
 
     def set_verbose(self, verbose):
         u"""ログ出力を設定."""
@@ -460,6 +516,39 @@ class MainController():
         self.settei.settings["verbose"] = verbose
         if self.video is not None:
             self.video.set_verbose(verbose)
+
+    def set_imgscale(self):
+        u"""画像スケールを設定."""
+        print("main_ctr:set_imgscale")
+        imgscale = self.main_view.get_imgscale()
+        old_imgscale = self.settei.settings["imgscale"]
+        self.settei.settings["imgscale"] = imgscale
+        if self.video is not None:
+            self.video.set_imgscale(imgscale)
+            height,width = self.video.get_size()
+            self.main_view.set_imgsize_label(width,height)
+            top, bottom, left, right = self.main_view.get_detectionarea()
+            aspect = imgscale / old_imgscale
+            self.set_detectionarea(
+                int(top * aspect), int(bottom * aspect), int(left * aspect), int(right * aspect))
+
+    def set_detectA(self, enabled):
+        u"""表示画像を設定."""
+        self.settei.settings["detecttype"] = "detectA"
+        if self.video is not None:
+            self.video.set_detecttype("detectA")
+
+    def set_detectB(self, enabled):
+        u"""表示画像を設定."""
+        self.settei.settings["detecttype"] = "detectB"
+        if self.video is not None:
+            self.video.set_detecttype("detectB")
+
+    def set_detectC(self, enabled):
+        u"""表示画像を設定."""
+        self.settei.settings["detecttype"] = "detectC"
+        if self.video is not None:
+            self.video.set_detecttype("detectC")
 
     def set_detectionarea_by_mouse(self, event):
         u"""検出範囲をマウスで選択."""
@@ -478,126 +567,128 @@ class MainController():
         self.main_view.set_mouseselect(False)
 
 
-class CuiController():
-    u"""Cuiコントローラークラス."""
-
-    def __init__(self, settei):
-        u"""初期設定."""
-        self.settei = settei
-        self.video = None
-        self.playlist = None
-        self.playnumber = None
-        self.playfile = None
-        self.pause = True
-        # コマンドライン引数取得
-        args = docopt(__doc__, version="0.1.2")
-        self.settei.load_cui_settings(args)
-        if self.settei.settings["webcam"]:  # カメラ入力
-            print("Input from webcam...")
-            ok = self.set_webcam()
-            if not ok:
-                print("Nothing Input webcam.")
-                sys.exit()
-            while(ok):
-                try:
-                    ok = self.play()
-                except KeyboardInterrupt:
-                    print("\nKeyboardInterrupt!!!\n")
-                    self.video.close_video()
-                    sys.exit()
-        else:  # ビデオ入力
-            playdir = self.settei.settings["playdir"]
-            if os.path.exists(playdir):
-                self.playlist = self.get_playlist(playdir)
-                if len(self.playlist) > 0:
-                    # プレイリストのビデオに対してチェック
-                    for playfile in self.playlist:
-                        self.set_video(playfile)
-                        ok = True
-                        while(ok):
-                            ok = self.play()
-                else:
-                    print("Nothing playlist.")
-            else:
-                print("playdir does not exist.")
-            sys.exit()
-
-    def set_video(self, playfile):
-        u"""ビデオの初期設定."""
-        print(playfile)
-        tmppath = self.settei.settings[
-            "outdir"] + playfile.replace(self.settei.settings["playdir"], "")
-        recursive_outdir = os.path.dirname(tmppath)
-        self.playfile = playfile
-        self.video = Video(playfile, recursive_outdir)
-        self.video.set_bounding(
-            self.settei.settings["bounding"])
-        self.video.set_verbose(self.settei.settings["verbose"])
-        top = self.settei.settings["detectionTop"]
-        bottom = self.settei.settings["detectionBottom"]
-        left = self.settei.settings["detectionLeft"]
-        right = self.settei.settings["detectionRight"]
-        self.video.set_detectionarea(top, bottom, left, right)
-
-    def set_webcam():
-        u"""カメラの初期設定."""
-        ok = False
-        outdir = self.settei.settings["outdir"]
-        playfile = self.playfile = self.settei.settings["device"]
-        self.video = Video(playfile, outdir, webcam=True)
-        if self.video.check_webcam() is True:
-            height, width = self.video.get_size()
-            top = 0
-            bottom = height
-            left = 0
-            right = width
-            self.video.set_detectionarea(top, bottom, left, right)
-            self.video.set_bounding(self.settei.settings["bounding"])
-            self.video.set_verbose(self.settei.settings["verbose"])
-            ok = True
-        return ok
-
-    def play(self):
-        u"""再生＆検知."""
-        # 1フレーム処理
-        ret = self.video.process_nextframe()
-
-        if ret is True:
-                # ビデオ終わりでなければビデオ＆jpg書き出しチェック＆実行
-            if self.settei.settings["writejpg"]:
-                self.video.writeout_jpg()
-            if self.settei.settings["writevideo"]:
-                self.video.writeout_video()
-            # if self.settei.settings["webcam"]:
-            #    self.video.writeout_webcam()
-        else:
-            # ビデオ終わりなら書き込み終了＆結果出力＆検知グラフ＆データ出力
-            self.video.close_video()
-
-        return ret
-
-    def fild_all_files(self, directory):
-        u"""ビデオリスト取得のための関数."""
-        for root, dirs, files in os.walk(directory):
-            yield root
-            for file in files:
-                yield os.path.join(root, file)
-
-    def get_playlist(self, playdir):
-        u"""ディレクトリ内のビデオのリストを取得."""
-        playlist = []
-        for file in self.fild_all_files(playdir):
-            ext = splitext(basename(file))[1][1:].lower()  # ピリオドを抜いた拡張子
-            if ext in self.settei.settings and self.settei.settings[ext]:
-                playlist.append(file.replace('/', os.sep))
-        return playlist
+# class CuiController():
+#     u"""Cuiコントローラークラス."""
+#
+#     def __init__(self, settei):
+#         u"""初期設定."""
+#         self.settei = settei
+#         self.video = None
+#         self.playlist = None
+#         self.playnumber = None
+#         self.playfile = None
+#         self.pause = True
+#         # コマンドライン引数取得
+#         args = docopt(__doc__, version="0.1.2")
+#         self.settei.load_cui_settings(args)
+#         if self.settei.settings["webcam"]:  # カメラ入力
+#             print("Input from webcam...")
+#             ok = self.set_webcam()
+#             if not ok:
+#                 print("Nothing Input webcam.")
+#                 sys.exit()
+#             while(ok):
+#                 try:
+#                     ok = self.play()
+#                 except KeyboardInterrupt:
+#                     print("\nKeyboardInterrupt!!!\n")
+#                     self.video.close_video()
+#                     sys.exit()
+#         else:  # ビデオ入力
+#             playdir = self.settei.settings["playdir"]
+#             if os.path.exists(playdir):
+#                 self.playlist = self.get_playlist(playdir)
+#                 if len(self.playlist) > 0:
+#                     # プレイリストのビデオに対してチェック
+#                     for playfile in self.playlist:
+#                         self.set_video(playfile)
+#                         ok = True
+#                         while(ok):
+#                             ok = self.play()
+#                 else:
+#                     print("Nothing playlist.")
+#             else:
+#                 print("playdir does not exist.")
+#             sys.exit()
+#
+#     def set_video(self, playfile):
+#         u"""ビデオの初期設定."""
+#         print(playfile)
+#         tmppath = self.settei.settings[
+#             "outdir"] + playfile.replace(self.settei.settings["playdir"], "")
+#         recursive_outdir = os.path.dirname(tmppath)
+#         self.playfile = playfile
+#         self.video = Video(playfile, recursive_outdir)
+#         self.video.set_bounding(
+#             self.settei.settings["bounding"])
+#         self.video.set_verbose(self.settei.settings["verbose"])
+#         top = self.settei.settings["detectionTop"]
+#         bottom = self.settei.settings["detectionBottom"]
+#         left = self.settei.settings["detectionLeft"]
+#         right = self.settei.settings["detectionRight"]
+#         self.video.set_detectionarea(top, bottom, left, right)
+#
+#     def set_webcam():
+#         u"""カメラの初期設定."""
+#         ok = False
+#         outdir = self.settei.settings["outdir"]
+#         playfile = self.playfile = self.settei.settings["device"]
+#         self.video = Video(playfile, outdir, webcam=True)
+#         if self.video.check_webcam() is True:
+#             height, width = self.video.get_size()
+#             top = 0
+#             bottom = height
+#             left = 0
+#             right = width
+#             self.video.set_detectionarea(top, bottom, left, right)
+#             self.video.set_bounding(self.settei.settings["bounding"])
+#             self.video.set_verbose(self.settei.settings["verbose"])
+#             ok = True
+#         return ok
+#
+#     def play(self):
+#         u"""再生＆検知."""
+#         # 1フレーム処理
+#         ret = self.video.process_nextframe()
+#
+#         if ret is True:
+#                 # ビデオ終わりでなければビデオ＆jpg書き出しチェック＆実行
+#             if self.settei.settings["writejpg"]:
+#                 self.video.writeout_jpg()
+#             if self.settei.settings["writevideo"]:
+#                 self.video.writeout_video()
+#             # if self.settei.settings["webcam"]:
+#             #    self.video.writeout_webcam()
+#         else:
+#             # ビデオ終わりなら書き込み終了＆結果出力＆検知グラフ＆データ出力
+#             self.video.close_video()
+#
+#         return ret
+#
+#     def fild_all_files(self, directory):
+#         u"""ビデオリスト取得のための関数."""
+#         for root, dirs, files in os.walk(directory):
+#             yield root
+#             for file in files:
+#                 yield os.path.join(root, file)
+#
+#     def get_playlist(self, playdir):
+#         u"""ディレクトリ内のビデオのリストを取得."""
+#         playlist = []
+#         for file in self.fild_all_files(playdir):
+#             ext = splitext(basename(file))[1][1:].lower()  # ピリオドを抜いた拡張子
+#             if ext in self.settei.settings and self.settei.settings[ext]:
+#                 playlist.append(file.replace('/', os.sep))
+#         return playlist
+#
 
 
 if __name__ == '__main__':
     u"""メイン."""
     if len(sys.argv) > 1:
-        settei = Settei()
-        cui_ctrl = CuiController(settei)
+#        settei = Settei()
+#        cui_ctrl = CuiController(settei)
+        pass
     else:
         app = QtGui.QApplication(sys.argv)
         settei = Settei()

@@ -39,6 +39,10 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.pixmap = QtGui.QPixmap(640, 360)
         self.pixmap.fill(QtCore.Qt.black)
         self.videoFrame.setPixmap(self.pixmap)
+        self.imgscale_comboBox.addItem("1.0")
+        self.imgscale_comboBox.addItem("0.5")
+        self.imgscale_comboBox.addItem("0.25")
+        print(self.imgscale_comboBox.currentText())
 
     def set_settings(self, settei):
         u"""設定をGUIに反映."""
@@ -56,6 +60,14 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.bounding_checkBox.setChecked(settei.settings["bounding"])
         self.display_checkBox.setChecked(settei.settings["display"])
         self.verbose_checkBox.setChecked(settei.settings["verbose"])
+        imgscaleindex = self.imgscale_comboBox.findText(str(settei.settings["imgscale"]))
+        self.imgscale_comboBox.setCurrentIndex(imgscaleindex)
+        if settei.settings["detecttype"] == "detectA":
+           self.detectA_radioButton.setChecked(True)
+        elif settei.settings["detecttype"] == "detectB":
+           self.detectB_radioButton.setChecked(True)
+        elif settei.settings["detecttype"] == "detectC":
+           self.detectC_radioButton.setChecked(True)
         self.detectionTop_Edit.setText(str(settei.settings["detectionTop"]))
         self.detectionBottom_Edit.setText(
             str(settei.settings["detectionBottom"]))
@@ -81,6 +93,11 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         u"""ステップビデオボタンの有効＆無効化一括変更."""
         self.previousvideoButton.setEnabled(state)
         self.nextvideoButton.setEnabled(state)
+        self.nextframeButton.setEnabled(state)
+
+    def set_settingframe(self, state):
+        u"""コンボボックスの有効＆無効化"""
+        self.frame.setEnabled(state)
 
     def set_treeview(self, state):
         u"""ツリービューの有効＆無効化"""
@@ -112,6 +129,16 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         model = self.treeView.model()
         model.setNameFilters(namefilter)
         self.treeView.setModel(model)
+
+    def set_detectselect(self, state):
+        u"""検知選択関連を設定."""
+        print("main_view:set_detectselect")
+        self.detectionArea_Button.setEnabled(state)
+        self.detectionTop_Edit.setEnabled(state)
+        self.detectionBottom_Edit.setEnabled(state)
+        self.detectionLeft_Edit.setEnabled(state)
+        self.detectionRight_Edit.setEnabled(state)
+        self.resetArea_Button.setEnabled(state)
 
     def set_mouseselect(self, state):
         u"""検知範囲のマウス選択を設定."""
@@ -232,6 +259,14 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         verbose = self.verbose_checkBox.isChecked()
         return verbose
 
+    def get_imgscale(self):
+        u"""画像スケール？"""
+        imgscale = float(self.imgscale_comboBox.currentText())
+        return imgscale
+
+    def set_imgsize_label(self,width,height):
+        self.imgsize_label.setText("{}×{}".format(width,height))
+
     def set_outdir(self, outdir):
         u"""出力フォルダのテキストを設定."""
         self.outdirEdit.setText(outdir)
@@ -298,6 +333,7 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.logEdit.insertPlainText("Nothing input video!\n")
         self.videoFrame.clear()
         self.detectionArea_Button.setEnabled(False)
+        self.set_detectselect(False)
         # self.set_video(None)
 
     def set_video_view(self, filename, framecount):
@@ -314,6 +350,7 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.pixmap.fill(QtCore.Qt.black)
         self.videoFrame.setPixmap(self.pixmap)
         self.detectionArea_Button.setEnabled(True)
+        self.set_detectselect(True)
 
     def get_filename_treeview(self, index):
         u"""ツリービューから選択されたファイルを返す."""

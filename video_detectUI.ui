@@ -57,7 +57,7 @@
          <x>10</x>
          <y>160</y>
          <width>291</width>
-         <height>172</height>
+         <height>180</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_6">
@@ -108,6 +108,62 @@
           </property>
          </widget>
         </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="label_8">
+            <property name="text">
+             <string>検知タイプ</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="detectA_radioButton">
+            <property name="text">
+             <string>A</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="detectB_radioButton">
+            <property name="text">
+             <string>B</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="detectC_radioButton">
+            <property name="text">
+             <string>C</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <item>
+           <widget class="QLabel" name="label_9">
+            <property name="text">
+             <string>処理サイズ倍率</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="imgscale_comboBox"/>
+          </item>
+          <item>
+           <widget class="QLabel" name="imgsize_label">
+            <property name="text">
+             <string>1280×720</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
        </layout>
       </widget>
       <widget class="QGroupBox" name="groupBox">
@@ -120,7 +176,7 @@
         </rect>
        </property>
        <property name="title">
-        <string>対象範囲設定 (左,上 = 0,0)</string>
+        <string>検知範囲設定 (左,上 = 0,0)</string>
        </property>
        <widget class="QPushButton" name="detectionArea_Button">
         <property name="enabled">
@@ -231,6 +287,19 @@
         </property>
         <property name="text">
          <string>右</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="resetArea_Button">
+        <property name="geometry">
+         <rect>
+          <x>196</x>
+          <y>14</y>
+          <width>80</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>範囲リセット</string>
         </property>
        </widget>
       </widget>

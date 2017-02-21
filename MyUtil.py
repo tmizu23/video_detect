@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
+import sys
+import os
 import glob
+
+def find_initdir():
+    # exeの場所（管理者権限がないと書き込めずエラーになるのでHOMEに）
+    if getattr(sys, 'frozen', False):
+         #datadir = os.path.dirname(sys.executable)
+         datadir = os.path.expanduser('~')
+    else:
+         datadir = os.path.dirname(__file__)
+    # ホーム
+    return datadir
 
 def get_actual_filename(name):
     dirs = name.split('\\')

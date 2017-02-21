@@ -5,7 +5,7 @@ import codecs
 import json
 from collections import OrderedDict
 import glob
-from MyUtil import get_actual_filename
+from MyUtil import get_actual_filename,find_initdir
 
 class Settei():
     u"""処理設定用クラス."""
@@ -15,8 +15,8 @@ class Settei():
         self.settings = OrderedDict([
             ("webcam", False),
             ("device", 0),
-            ("playdir", get_actual_filename(os.path.dirname(__file__))),
-            ("outdir", get_actual_filename(os.path.dirname(__file__))),
+            ("playdir", get_actual_filename(find_initdir())),
+            ("outdir", get_actual_filename(find_initdir())),
             ("avi", True),
             ("mov", True),
             ("mpg", True),
@@ -30,6 +30,8 @@ class Settei():
             ("bounding", True),
             ("display", True),
             ("verbose", True),
+            ("detecttype", "detectA"),
+            ("imgscale", 1.0),
             ("detectionTop", 0),
             ("detectionBottom", 720),
             ("detectionLeft", 0),
@@ -99,15 +101,15 @@ class Settei():
             outdir = self.settings["outdir"]
             if not os.path.exists(outdir):
                 self.settings["outdir"] = get_actual_filename(
-                    os.path.dirname(__file__))
+                    find_initdir())
             playdir = self.settings["playdir"]
             if not os.path.exists(playdir):
                 self.settings["playdir"] = get_actual_filename(
-                    os.path.dirname(__file__))
+                    find_initdir())
 
     def save_settings(self, setting_file):
         u"""設定ファイルの書き出し."""
-        inidir = get_actual_filename(os.path.dirname(__file__))
+        inidir = get_actual_filename(find_initdir())
         f = codecs.open(join(inidir, setting_file),
                         'w', 'utf-8')  # 書き込みモードで開く
         json.dump(self.settings, f, indent=2,
