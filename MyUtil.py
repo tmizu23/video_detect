@@ -3,15 +3,22 @@ import sys
 import os
 import glob
 
-def find_initdir():
+
+def find_exedir():
+    if getattr(sys, 'frozen', False):
+         exedir = os.path.dirname(sys.executable)
+    else:
+         exedir = os.path.dirname(__file__)
+    return exedir
+
+def find_rootdir():
     # exeの場所（管理者権限がないと書き込めずエラーになるのでHOMEに）
     if getattr(sys, 'frozen', False):
-         #datadir = os.path.dirname(sys.executable)
-         datadir = os.path.expanduser('~')
+         rootdir = os.path.expanduser('~')
     else:
-         datadir = os.path.dirname(__file__)
+         rootdir = os.path.dirname(__file__)
     # ホーム
-    return datadir
+    return rootdir
 
 def get_actual_filename(name):
     dirs = name.split('\\')

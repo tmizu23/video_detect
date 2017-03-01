@@ -55,9 +55,9 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>160</y>
+         <y>150</y>
          <width>291</width>
-         <height>180</height>
+         <height>201</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_6">
@@ -105,6 +105,13 @@
          <widget class="QCheckBox" name="verbose_checkBox">
           <property name="text">
            <string>ログ出力</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="learning_checkBox">
+          <property name="text">
+           <string>学習モード</string>
           </property>
          </widget>
         </item>
@@ -170,7 +177,7 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>350</y>
+         <y>360</y>
          <width>291</width>
          <height>111</height>
         </rect>
@@ -693,7 +700,7 @@ color: rgb(255, 255, 255);</string>
         <string/>
        </property>
        <property name="icon">
-        <iconset resource="video_detect.qrc">
+        <iconset>
          <normaloff>:/newPrefix/leftarrow114.png</normaloff>:/newPrefix/leftarrow114.png</iconset>
        </property>
       </widget>
@@ -732,7 +739,7 @@ color: rgb(255, 255, 255);</string>
         <string/>
        </property>
        <property name="icon">
-        <iconset resource="video_detect.qrc">
+        <iconset>
          <normaloff>:/newPrefix/right arrow114.png</normaloff>:/newPrefix/right arrow114.png</iconset>
        </property>
       </widget>
@@ -803,7 +810,7 @@ color: rgb(255, 255, 255);</string>
      <string>...</string>
     </property>
     <property name="icon">
-     <iconset resource="video_detect.qrc">
+     <iconset>
       <normaloff>:/newPrefix/folder265.png</normaloff>:/newPrefix/folder265.png</iconset>
     </property>
    </widget>

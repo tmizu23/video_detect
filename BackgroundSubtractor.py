@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-
+import os
 import cv2
 import numpy as np
-
+from MyUtil import find_exedir
 
 class BackgroundSubtractor:
 
     def __init__(self, learningrate, skip=0):
+        u"""パラメータの初期化."""
         self.learningrate = learningrate
         self.fgbg = cv2.createBackgroundSubtractorKNN(history=0,
             dist2Threshold=20, detectShadows=0)  # 背景差分設定
@@ -17,14 +18,13 @@ class BackgroundSubtractor:
         self.hits = [0] * 5  # ヒット（動物の可能性）したからどうか.過去5フレームを記録
         self.hitmax = 3  # 過去5フレームの内、何フレームがhitだと検知とするか
         self.detecttype = None  # 動物の可能性を判断した条件
-        self.car_cascade = cv2.CascadeClassifier("car_cascade.xml")
-        self.animal_cascade = cv2.CascadeClassifier("animal_cascade.xml")
+        self.car_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/car_cascade.xml")
+        self.animal_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/animal_cascade.xml")
 
     def apply(self, gframe):
-        bframe = None
-
+        u"""背景差分の画像更新."""
+        bframe = self.fgbg.apply(gframe, learningRate=self.learningrate)
         if self.count > self.skip:
-            bframe = self.fgbg.apply(gframe, learningRate=self.learningrate)
             if bframe is None:
                 return None
             # 膨張・収縮でノイズ除去(設置環境に応じてチューニング)
@@ -32,10 +32,8 @@ class BackgroundSubtractor:
             bframe = cv2.morphologyEx(bframe, cv2.MORPH_OPEN, kernel)
             bframe = cv2.morphologyEx(bframe, cv2.MORPH_DILATE, kernel)
             bframe = cv2.morphologyEx(bframe, cv2.MORPH_CLOSE, kernel)
-            # メディアンフィルタでノイズ除去
-            #bframe = cv2.GaussianBlur(bframe, (41, 41), 0)
-            #bframe = cv2.medianBlur(bframe,5)
             self.bframe = bframe
+
         else:
             self.count += 1
             self.bframe = None
@@ -67,6 +65,7 @@ class BackgroundSubtractor:
         video.cap.set(cv2.CAP_PROP_POS_FRAMES, video.curpos)
 
     def detect(self, gframe):
+        u"""検知処理."""
         state = "NODETECT"
         animals = None
         cars = None
@@ -190,8 +189,8 @@ class BackgroundSubtractor:
 
     def draw(self, cframe):
         # 動体の輪郭が最大のものを描画（検知なら白、それ以外は青色）
-        if self.bframe is not None:
-            cframe = cv2.cvtColor(self.bframe, cv2.COLOR_GRAY2BGR)
+        #if self.bframe is not None:
+        #    cframe = cv2.cvtColor(self.bframe, cv2.COLOR_GRAY2BGR)
         if self.exist is not None:
             bounding_color = (0, 255, 255)
         elif self.state == "DETECT":

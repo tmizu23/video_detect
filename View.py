@@ -42,7 +42,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.imgscale_comboBox.addItem("1.0")
         self.imgscale_comboBox.addItem("0.5")
         self.imgscale_comboBox.addItem("0.25")
-        print(self.imgscale_comboBox.currentText())
 
     def set_settings(self, settei):
         u"""設定をGUIに反映."""
@@ -60,6 +59,7 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.bounding_checkBox.setChecked(settei.settings["bounding"])
         self.display_checkBox.setChecked(settei.settings["display"])
         self.verbose_checkBox.setChecked(settei.settings["verbose"])
+        self.learning_checkBox.setChecked(settei.settings["learning"])
         imgscaleindex = self.imgscale_comboBox.findText(str(settei.settings["imgscale"]))
         self.imgscale_comboBox.setCurrentIndex(imgscaleindex)
         if settei.settings["detecttype"] == "detectA":
@@ -105,7 +105,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def set_inputformat(self):
         u"""入力ビデオフォーマットのフィルタリング設定."""
-        print("main_view:set_inputformat")
         namefilter = []
         if self.avi_checkBox.isChecked():
             namefilter.extend(["*.AVI", "*.avi"])
@@ -132,7 +131,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def set_detectselect(self, state):
         u"""検知選択関連を設定."""
-        print("main_view:set_detectselect")
         self.detectionArea_Button.setEnabled(state)
         self.detectionTop_Edit.setEnabled(state)
         self.detectionBottom_Edit.setEnabled(state)
@@ -142,12 +140,10 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def set_mouseselect(self, state):
         u"""検知範囲のマウス選択を設定."""
-        print("main_view:set_mouseselect")
         self.detectionArea_Button.setEnabled(state)
 
     def select_detectionarea_by_mouse(self, event):
         u"""検知範囲のマウス選択処理."""
-        print("main_view:select_detectionarea_by_mouse")
         x = event.pos().x()
         y = event.pos().y()
         # クリック開始
@@ -167,7 +163,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def set_detectionarea_by_mouse(self, event, height):
         u"""検知範囲のマウス選択処理."""
-        print("main_view:set_detectionarea_by_mouse")
         x = event.pos().x()
         y = event.pos().y()
         ratio = height / 360.0
@@ -181,7 +176,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def draw_detectionarea(self, top, bottom, left, right, height):
         u"""検知範囲の描画."""
-        print("main_view:draw_detectionarea")
         if height == 0:
             height = 480
         ratio = 360.0 / height  # ビデオの高さと画面の高さの比
@@ -198,7 +192,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def get_detectionarea(self):
         u"""検知範囲を返す."""
-        print("main_view:get_detectionarea")
         top = int(self.detectionTop_Edit.text())
         bottom = int(self.detectionBottom_Edit.text())
         left = int(self.detectionLeft_Edit.text())
@@ -207,7 +200,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def set_detectionarea(self, top, bottom, left, right, height):
         u"""検知範囲の設定."""
-        print("main_view:set_detectionarea")
         self.detectionTop_Edit.setText(str(top))
         self.detectionBottom_Edit.setText(str(bottom))
         self.detectionLeft_Edit.setText(str(left))
@@ -259,6 +251,11 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         verbose = self.verbose_checkBox.isChecked()
         return verbose
 
+    def get_learning(self):
+        u"""学習モードか？"""
+        learning = self.learning_checkBox.isChecked()
+        return learning
+
     def get_imgscale(self):
         u"""画像スケール？"""
         imgscale = float(self.imgscale_comboBox.currentText())
@@ -279,7 +276,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def get_playdir(self):
         u"""再生ビデオフォルダ選択.プレイリストをセット."""
-        print("main_view:get_playdir")
         playdir = QtGui.QFileDialog.getExistingDirectory(
             self, "Select folder")
         return playdir
@@ -338,7 +334,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def set_video_view(self, filename, framecount):
         u"""再生ビデオを変更＆初期設定."""
-        print("main_view:set_video_view")
         model = self.treeView.model()
         index = model.index(filename)
         self.treeView.scrollTo(index, QtGui.QAbstractItemView.PositionAtCenter)

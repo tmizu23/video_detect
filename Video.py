@@ -12,20 +12,20 @@ import codecs
 from OpticalFlow import MotionDetection
 from BackgroundSubtractor import BackgroundSubtractor
 
+
 class Video():
     u"""ビデオ解析用クラス.背景差分法により動体を抽出する.フレーム間での動体の動き方によって
     動物かどうか検知する.動物と検知した動画、静止画を出力する.動画全体の動体の特徴量から
     機械学習モデルで動物かどうかの判定を行う."""
 
-    def __init__(self, playfile, outdir, logfunc, webcam=False):
+    def __init__(self, playfile, outdir, logfunc=None, webcam=False):
         u"""ビデオ初期設定."""
         # 再生ファイル、出力フォルダ、映像サイズ、映像フレーム数、 fps、検知範囲 、現在位置、領域出力するかどうか、ログ出力するかどうかの設定
         self.webcam = webcam
-        self.learned = False
         self.playfile = playfile
         self.cap = cv2.VideoCapture(self.playfile)
-        self.FPS = 15 #強制的にこのfpsにしてビデオを読み書き
-        if self.webcam: #
+        self.FPS = 15  # 強制的にこのfpsにしてビデオを読み書き
+        if self.webcam:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
             self.cap.set(cv2.CAP_PROP_FPS, self.FPS)
@@ -33,8 +33,8 @@ class Video():
         self.imgscale = 1.0
         self.org_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.org_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.width = int(self.org_width * self.imgscale) #処理サイズ
-        self.height = int(self.org_height * self.imgscale) #処理サイズ
+        self.width = int(self.org_width * self.imgscale)  # 処理サイズ
+        self.height = int(self.org_height * self.imgscale)  # 処理サイズ
         self.framecount = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.detect_left = 0
@@ -44,33 +44,36 @@ class Video():
         self.curpos = 0
         self.bounding = True
         self.verbose = True
+        self.learning = False  # ラベルの学習モードかどうか
         self.state = "NODETECT"  # 検知中かどうか
-        self.INTERVAL = 0#self.FPS*10 # 検知間隔フレーム数(10秒、記録が連続になるように)
+        self.stateBS = "NODETECT"  # bsの検知状況.jpg書き出しのため
+        self.INTERVAL = 0  # self.FPS*10 # 検知間隔フレーム数(10秒、記録が連続になるように)
         self.interval_count = 0  # 検知間隔のカウント
-        self.BEFORE_VIDEO_LENGTH = self.FPS*10 # 検知前の動画を保存するフレーム数(10秒)
-        self.AFTER_VIDEO_LENGTH = self.FPS*5  # 検知後の動画を保存するフレーム数(5秒)
+        self.BEFORE_VIDEO_LENGTH = self.FPS * 10  # 検知前の動画を保存するフレーム数(10秒)
+        self.AFTER_VIDEO_LENGTH = self.FPS * 5  # 検知後の動画を保存するフレーム数(5秒)
         self.video_count = -1  # 動画保存の残りフレーム数
         self.frames = []  # 検知前の動画を一時的に保存しておく
-        self.times = []
+        self.times = []  # fps計算のため現在時刻を一時的に保存しておく
+        self.states = []  # bsの検知状況を一時的に保存しておく.jpg書き出しのため
         self.writing = False  # 検知して動画を書き込み中かどうか
         self.waiting = False
         self.videoWriter = None  # ビデオ書き出し用オブジェクト
         self.videoWriter_webcam = None  # webcamの全映像書き出し用オブジェクト
         self.webcam_savetime = None  # webcamの映像保存開始時間
         self.frame = None  # 現在のフレーム画像
-        self.view_frame = None # 表示用フレーム
+        self.view_frame = None  # 表示用フレーム
         self.crop_frame = None  # 検知エリアの切り出しフレーム
         self.func = logfunc  # GUIにログを通知するための関数（observerモデル）
         self.detecttype = None
-        self.m = 0 # fps調整用変数
-        self.bs = None #BackgroundSubtractor
-        self.of = None #OpticalFlow
-        self.labeling = True #ラベルの学習モードかどうか
-        self.label = 0 #キー入力のラベル
-        self.set_label_logfile() #学習ラベル用のログファイル
-        self.notify("size:{}×{} fps:{} frame:{}\n".format(self.org_width,self.org_height,self.video_fps,self.framecount))
+        self.m = 0  # fps調整用変数
+        self.bs = None  # BackgroundSubtractor
+        self.of = None  # OpticalFlow
+        self.label = 0  # キー入力のラベル
+        self.set_label_logfile()  # 学習ラベル用のログファイル
+        self.notify("size:{}×{} fps:{} frame:{}\n".format(
+            self.org_width, self.org_height, self.video_fps, self.framecount))
 
-    def set_label(self,label):
+    def set_label(self, label):
         self.label = label
         self.of.label = label
 
@@ -80,55 +83,43 @@ class Video():
         if detecttype == "detectA":
             pass
         if detecttype == "detectB":
-            learningrate = 1.0/10  # 500  # 150 #1.0/90 # 0だとだめ
+            learningrate = 1.0 / 10  # 500  # 150 #1.0/90 # 0だとだめ
             self.bs = BackgroundSubtractor(learningrate)
-            self.of = MotionDetection(self.FPS,labeling=self.labeling)
+            self.of = MotionDetection(
+                self.FPS, self.height,labeling=self.learning, bounding=self.bounding)
         if detecttype == "detectC":
             if self.webcam:
                 learningrate = 1.0 / 10  # 背景差分の更新頻度
             else:
                 learningrate = 1.0 / 10  # 150 #1.0/90 # 0だとだめ
-            self.bs = BackgroundSubtractor(learningrate, skip=2)
-
-    def init_learning(self):
-        u"""背景画像の学習."""
-        # print("main_model:init_learning")
-        if not self.learned and not self.webcam:
-            if self.detecttype == "detectA":
-                pass
-            if self.detecttype == "detectB":
-                pass
-            if self.detecttype == "detectC":
-                pass
-                #self.bs.init_learning(self)
-        self.learned = True
+            self.bs = BackgroundSubtractor(learningrate, skip=5)
 
     def get_currentframe(self, bounding):
         ok, frame = self.cap.read()
-        rframe=cv2.resize(frame, (self.width, self.height))
+        rframe = cv2.resize(frame, (self.width, self.height))
         if bounding:
             cv2.rectangle(rframe, (self.detect_left, self.detect_top), (
-                    self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
+                self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
         frame = cv2.cvtColor(rframe, cv2.COLOR_BGR2RGB)
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.curpos);
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.curpos)
         return frame
 
     def process_nextframe(self):
         u"""ビデオフレーム読み込み＆処理."""
-        fgmask = None
+        self.state = "NODETECT"
         self.cursec = int(self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
         self.curpos = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
         ok, frame = self.cap.read()
         if not ok:
-            return False,False
-        #fpsがself.FPSになるように調整。
+            return False, False
+        # fpsがself.FPSになるように調整。
         if not self.webcam:
             #print("{},{},{},{}".format(self.curpos,self.video_fps,self.m,self.curpos % self.video_fps))
-            if (self.curpos % self.video_fps) < 1: #==0だったけど、29.97対応で<1に変更。
+            if (self.curpos % self.video_fps) < 1:  # ==0だったけど、29.97対応で<1に変更。
                 self.m = 0
-            if (self.curpos % self.video_fps) < self.m :
+            if (self.curpos % self.video_fps) < self.m:
                 return True, True
-            self.m = self.m + (self.video_fps/self.FPS)
+            self.m = self.m + (self.video_fps / self.FPS)
         # リサイズ
         rframe = cv2.resize(frame, (self.width, self.height))
         # 切り出し
@@ -139,14 +130,16 @@ class Video():
         #gframe = cv2.fastNlMeansDenoising(gframe, None,10,7,21)
         gframe = cv2.GaussianBlur(gframe, (5, 5), 0)  # 映像ノイズ削除
         gframe = cv2.equalizeHist(gframe)
+        ##########
+        # 更新処理
+        ##########
         # なにもしない
         if self.detecttype == "detectA":
             pass
         # オプティカルフロー（トラッキング）
         if self.detecttype == "detectB":
             bframe = self.bs.apply(gframe)
-            self.of.apply(cframe, bframe)
-
+            self.of.apply(gframe, bframe)
         # 背景差分
         if self.detecttype == "detectC":
             self.bs.apply(gframe)
@@ -156,14 +149,16 @@ class Video():
         ##########
         # 検知してからINTERVALの回数の間は、検知処理しない。
         # ラベリングのときはINTERVALしない。
-        if (not self.labeling) and self.state == "DETECT" and self.interval_count >= 0:
+        if (not self.learning) and self.state == "DETECT" and self.interval_count >= 0:
             self.interval_count -= 1
         else:
             self.interval_count = self.INTERVAL
             if self.detecttype == "detectA":
                 pass
             if self.detecttype == "detectB":
-                self.state = self.of.detect(self.imgscale,self.height,self.logfile)
+                self.state = self.of.detect(
+                    self.imgscale, self.logfile)
+                self.stateBS = self.bs.detect(gframe)
             if self.detecttype == "detectC":
                 self.state = self.bs.detect(gframe)
 
@@ -174,11 +169,11 @@ class Video():
                 print(
                     "\n    detect! --> animal:{} {}".format("webcam", timestr))
             else:
-                h = math.floor(self.cursec/3600)
-                m = math.floor(self.cursec/60)
-                s = self.cursec - h*3600 - m*60
+                h = math.floor(self.cursec / 3600)
+                m = math.floor(self.cursec / 60)
+                s = self.cursec - h * 3600 - m * 60
                 print(
-                    "\n    detect! --> animal: {} {}h{}m{}s".format(basename(self.playfile), h,m,s))
+                    "\n    detect! --> animal: {} {}h{}m{}s".format(basename(self.playfile), h, m, s))
         ##########
         # 表示処理
         ##########
@@ -189,7 +184,8 @@ class Video():
                 img = cframe
             # オプティカルフロー（トラッキング）
             if self.detecttype == "detectB":
-                img = self.of.draw(cframe,bframe)
+                img = self.of.draw(cframe)
+                #img = self.bs.draw(img)
             # 背景差分
             if self.detecttype == "detectC":
                 img = self.bs.draw(cframe)
@@ -200,12 +196,14 @@ class Video():
             cv2.rectangle(rframe, (self.detect_left, self.detect_top), (
                 self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
 
-        #学習ラベル作成用表示
-        if self.labeling and self.detecttype == "detectB":
-            cv2.putText(rframe,str(self.of.period_no),(10,30),cv2.FONT_HERSHEY_PLAIN, 2,(0,0,255))
-            cv2.putText(rframe,str(self.label),(40,30),cv2.FONT_HERSHEY_PLAIN, 2,(0,255,255))
+        # 学習ラベル作成用表示
+        if self.learning and self.detecttype == "detectB":
+            cv2.putText(rframe, str(self.of.period_no), (10, 30),
+                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255))
+            cv2.putText(rframe, str(self.label), (40, 30),
+                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 255))
         # ウェブカメの場合反転（内向きカメラ用）
-        #if self.webcam:
+        # if self.webcam:
         #    rframe = cv2.flip(rframe, 1)
 
         self.frame = frame  # 書き出し用
@@ -213,13 +211,15 @@ class Video():
         # 最新フレーム(数秒)を一時的に保存
         self.frames.append(self.frame)
         self.times.append(cv2.getTickCount())
+        self.states.append(self.stateBS)
         if len(self.frames) > self.BEFORE_VIDEO_LENGTH + self.AFTER_VIDEO_LENGTH:
             del self.frames[0]
             del self.times[0]
-        # ログ表示
-        if self.verbose and not self.webcam:
-            print("\r{0}%".format(int(
-                100.0 * self.curpos / self.framecount)))
+            del self.states[0]
+        # 進行状況表示
+        # if self.verbose and not self.webcam:
+        #     print("\r{0}%".format(int(
+        #         100.0 * self.curpos / self.framecount)))
 
         return True, False
 
@@ -227,7 +227,7 @@ class Video():
         u"""動画書き込みのクローズ."""
         if self.videoWriter is not None:
             #self.writing = False
-            #self.videoWriter.release()
+            # self.videoWriter.release()
             #self.videoWriter = None
             self.of.close()
         if self.videoWriter_webcam is not None:
@@ -258,6 +258,7 @@ class Video():
     def writeout_video(self):
         u"""動画書き込み."""
         if self.state == "DETECT" or self.waiting:
+            # 録画時間分フレームに保存して、最後に書き出す。
             if self.waiting:
                 self.video_count -= 1
             else:
@@ -268,91 +269,68 @@ class Video():
                 if not os.path.exists(self.outdir):
                     os.makedirs(self.outdir)
                 if self.webcam:
-                    print(len(self.frames))
                     filename = "webcam" + datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.mov'
-                    fps = round(len(self.frames)/((self.times[-1]-self.times[0])/cv2.getTickFrequency()),1)
+                    fps = round(
+                        len(self.frames) / ((self.times[-1] - self.times[0]) / cv2.getTickFrequency()), 1)
                 else:
-                    h = math.floor(self.cursec/3600)
-                    m = math.floor(self.cursec/60)
-                    s = self.cursec - h*3600 - m*60
+                    h = math.floor(self.cursec / 3600)
+                    m = math.floor(self.cursec / 60)
+                    s = self.cursec - h * 3600 - m * 60
                     filename = "{}_{}h{}m{}s.mov".format(splitext(basename(self.playfile))[
-                        0],h,m,s)
+                        0], h, m, s)
                     fps = self.FPS
 
                 outfile = join(self.outdir, filename)
                 self.videoWriter = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc(
                     'm', 'p', '4', 'v'), fps, (self.org_width, self.org_height))
-                # まず、検知直前30フレームを書き出す
+                # 書き出す
                 for v in self.frames:
                     self.videoWriter.write(v)
                 self.videoWriter.release()
                 self.videoWriter = None
 
-    def writeout_video2(self):
-        u"""動画書き込み."""
-        if self.state == "DETECT" or self.writing:
-            # 検知もしくは書き込み中なら
-            if self.writing:
-                # 動画書き込み中なら
-                self.videoWriter.write(self.frame)
-                self.video_count -= 1
-                if self.video_count < 0:  # 書き込み終了
-                    self.writing = False
-                    self.videoWriter.release()
-                    self.videoWriter = None
-            else:
-                # 動画書き込み中でなければ
-                if not os.path.exists(self.outdir):
-                    os.makedirs(self.outdir)
-                self.writing = True
-                self.video_count = self.AFTER_VIDEO_LENGTH
-                if self.webcam:
-                    filename = "webcam" + datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.mov'
-                else:
-                    h = math.floor(self.cursec/3600)
-                    m = math.floor(self.cursec/60)
-                    s = self.cursec - h*3600 - m*60
-                    filename = "{}_{}h{}m{}s.mov".format(splitext(basename(self.playfile))[
-                        0],h,m,s)
-                outfile = join(self.outdir, filename)
-                self.videoWriter = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc(
-                    'm', 'p', '4', 'v'), self.FPS, (self.org_width, self.org_height))
-                # まず、検知直前30フレームを書き出す
-                for v in self.frames:
-                    self.videoWriter.write(v)
-
     def writeout_jpg(self):
         u"""jpg書き出し."""
-        # 車でなく動物検知したら書き出し
+        # 検知したら書き出し
         if self.state == "DETECT":
             dt = datetime.datetime.now()
-            self.webcam_savetime = dt.strftime('%Y%m%d_%H%M%S')
             if not os.path.exists(self.outdir):
                 os.makedirs(self.outdir)
-            if self.webcam:
-                filename = "webcam" + self.webcam_savetime + '.jpg'
-                filename_crop = "webcam" + self.webcam_savetime + '_crop.jpg'
-            else:
-                h = math.floor(self.cursec/3600)
-                m = math.floor(self.cursec/60)
-                s = self.cursec - h*3600 - m*60
-                filename = "{}_{}h{}m{}s.jpg".format(splitext(basename(self.playfile))[0],h,m,s)
-                filename_crop = "{}_{}h{}m{}s_crop.jpg".format(splitext(basename(self.playfile))[0],h,m,s)
+            # フレーム全体なら
+            #idx = [i for i, x in enumerate(self.states) if x == "DETECT"]
+            # 最初のフレームだけ
+            idx = [self.states.index("DETECT")]
+            for i, x in enumerate(idx):
+                if self.webcam:
+                    self.webcam_savetime = dt.strftime('%Y%m%d_%H%M%S')
+                    filename = "webcam{0}_{1:02d}.jpg".format(
+                        self.webcam_savetime, i)
+                    filename_crop = "webcam{0}_{1:02d}_crop.jpg".format(
+                        self.webcam_savetime, i)
+                else:
+                    h = math.floor(self.cursec / 3600)
+                    m = math.floor(self.cursec / 60)
+                    s = self.cursec - h * 3600 - m * 60
+                    filename = "{0}_{1}h{2}m{3}s_{4:02d}.jpg".format(
+                        splitext(basename(self.playfile))[0], h, m, s, i)
+                    filename_crop = "{0}_{1}h{2}m{3}s_{4:02d}_crop.jpg".format(
+                        splitext(basename(self.playfile))[0], h, m, s, i)
 
-            # opencv3(+python3)だと日本語(cp932)だめ
-            # https://github.com/opencv/opencv/issues/4292
-            # とりあえずimencodeで代替策
-            outfile = join(self.outdir, filename)
-            with open(outfile, 'wb') as f:
-                ret,buf = cv2.imencode('.jpg',self.frame,[int(cv2.IMWRITE_JPEG_QUALITY),90])
-                f.write(np.array(buf).tostring())
-            outfile_crop = join(self.outdir, filename_crop)
-            #cv2.imwrite(outfile, self.frame)
-            #cv2.imwrite(outfile_crop, self.crop_frame)
+                # opencv3(+python3)だと日本語(cp932)だめ
+                # https://github.com/opencv/opencv/issues/4292
+                # とりあえずimencodeで代替策
+                outfile = join(self.outdir, filename)
+                with open(outfile, 'wb') as f:
+                    ret, buf = cv2.imencode('.jpg', self.frames[x], [
+                                            int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                    f.write(np.array(buf).tostring())
+                #outfile_crop = join(self.outdir, filename_crop)
+                #cv2.imwrite(outfile, self.frame)
+                #cv2.imwrite(outfile_crop, self.crop_frame)
 
     def writeout_result(self, outfile):
         u"""ログ書き出し."""
-        ###時間ごとの記録にする？ビデオ全体でいたかどうかのフラグ必要。
+        # 時間ごとの記録にする？ビデオ全体でいたかどうかのフラグ必要。
         if not os.path.exists(outfile):
             datastr = ",".join(
                 [u"ファイル名", u"検知", u"撮影時刻(24h)"])
@@ -391,22 +369,20 @@ class Video():
 
     def set_detectionarea(self, top, bottom, left, right):
         u"""検知範囲の設定."""
-        print("video:set_detectionarea")
         self.detect_top = top
         self.detect_bottom = bottom
         self.detect_left = left
         self.detect_right = right
-        self.learned = False
 
     def set_label_logfile(self):
-        #ログファイル.
+        # ログファイル.
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
         if not self.webcam:
             logfilename = "{}.csv".format(splitext(basename(self.playfile))[0])
             self.logfile = join(self.outdir, logfilename)
         else:
-            logfilename = "C:/Users/mizutani/Desktop/tmp.csv"
+            logfilename = "webcam" + datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv'
             self.logfile = join(self.outdir, logfilename)
 
     def set_outdir(self, outdir):
@@ -418,12 +394,15 @@ class Video():
         u"""ログ出力の設定."""
         self.verbose = verbose
 
+    def set_learning(self, learning):
+        u"""学習モードの設定."""
+        self.learning = learning
+
     def set_imgscale(self, imgscale):
         u"""画像スケールの設定."""
         self.imgscale = imgscale
         self.width = int(self.org_width * self.imgscale)
         self.height = int(self.org_height * self.imgscale)
-        self.learned = False
 
     def set_bounding(self, bounding):
         u"""検知領域出力の設定."""
