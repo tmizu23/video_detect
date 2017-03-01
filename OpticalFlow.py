@@ -39,7 +39,7 @@ class MotionDetection():
         self.logfile_l = None  # ラベル用ログファイル
         self.logfile_p = None  # ポイント位置ログファイル
         self.clf = pickle.load(
-            open(find_exedir() + os.sep + "data/test.pkl", 'rb'))  # 学習モデル
+            open(find_exedir() + os.sep + "data/model.pkl", 'rb'))  # 学習モデル
 
     def close(self):
         if self.logfile_p is not None:

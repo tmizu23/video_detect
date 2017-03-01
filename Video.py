@@ -35,6 +35,7 @@ class Video():
         self.org_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.width = int(self.org_width * self.imgscale)  # 処理サイズ
         self.height = int(self.org_height * self.imgscale)  # 処理サイズ
+        self.detect_mask = np.zeros((self.height, self.width),dtype=np.uint8) # 検知範囲のマスク
         self.framecount = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.detect_left = 0
@@ -123,13 +124,16 @@ class Video():
         # リサイズ
         rframe = cv2.resize(frame, (self.width, self.height))
         # 切り出し
-        cframe = rframe[self.detect_top:self.detect_bottom,
-                        self.detect_left:self.detect_right]
+        #cframe = rframe[self.detect_top:self.detect_bottom,
+        #                self.detect_left:self.detect_right]
+        cframe = rframe
         # グレー化&ヒストグラム平坦化（明るさの変化を抑えるため）
         gframe = cv2.cvtColor(cframe, cv2.COLOR_BGR2GRAY)
         #gframe = cv2.fastNlMeansDenoising(gframe, None,10,7,21)
         gframe = cv2.GaussianBlur(gframe, (5, 5), 0)  # 映像ノイズ削除
         gframe = cv2.equalizeHist(gframe)
+        gframe = cv2.bitwise_and(gframe,gframe,self.detect_mask)
+        #gframe = self.detect_mask
         ##########
         # 更新処理
         ##########
@@ -181,6 +185,7 @@ class Video():
         if self.bounding:
             # なにもしない
             if self.detecttype == "detectA":
+                cframe = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
                 img = cframe
             # オプティカルフロー（トラッキング）
             if self.detecttype == "detectB":
@@ -190,9 +195,9 @@ class Video():
             if self.detecttype == "detectC":
                 img = self.bs.draw(cframe)
             # 検知領域
-            rframe[self.detect_top:self.detect_bottom,
-                   self.detect_left:self.detect_right] = img
-
+            #rframe[self.detect_top:self.detect_bottom,
+            #       self.detect_left:self.detect_right] = img
+            rframe = img
             cv2.rectangle(rframe, (self.detect_left, self.detect_top), (
                 self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
 
@@ -373,6 +378,8 @@ class Video():
         self.detect_bottom = bottom
         self.detect_left = left
         self.detect_right = right
+        self.detect_mask[self.detect_top:self.detect_bottom,
+                        self.detect_left:self.detect_right] = 255
 
     def set_label_logfile(self):
         # ログファイル.
@@ -403,6 +410,7 @@ class Video():
         self.imgscale = imgscale
         self.width = int(self.org_width * self.imgscale)
         self.height = int(self.org_height * self.imgscale)
+        self.detect_mask = np.zeros((self.height, self.width),dtype=np.uint8)
 
     def set_bounding(self, bounding):
         u"""検知領域出力の設定."""
