@@ -60,7 +60,6 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         self.bounding_checkBox.setChecked(settei.settings["bounding"])
         self.display_checkBox.setChecked(settei.settings["display"])
         self.verbose_checkBox.setChecked(settei.settings["verbose"])
-        self.learning_checkBox.setChecked(settei.settings["learning"])
         if settei.settings["detecttype"] == "detectA":
            self.detectA_radioButton.setChecked(True)
         elif settei.settings["detecttype"] == "detectB":
@@ -134,54 +133,15 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
     def set_detectselect(self, state):
         u"""検知選択関連を設定."""
         self.detectionArea_Button.setEnabled(state)
-        self.paintBackground_Button.setEnabled(state)
         self.detectionTop_Edit.setEnabled(state)
         self.detectionBottom_Edit.setEnabled(state)
         self.detectionLeft_Edit.setEnabled(state)
         self.detectionRight_Edit.setEnabled(state)
         self.resetArea_Button.setEnabled(state)
 
-    def set_paintselect(self, state):
-        u"""背景分類のマウス選択を設定."""
-        if state:
-            self.paintBackground_Button.setText("選択終了")
-        else:
-            self.paintBackground_Button.setText("背景分類")
-
     def set_mouseselect(self, state):
         u"""検知範囲のマウス選択を設定."""
         self.detectionArea_Button.setEnabled(state)
-
-    def paint_background(self, event, paintmode):
-        u"""検知範囲のマウス選択処理."""
-        if paintmode==1:
-            pen = QtGui.QPen(QtGui.QColor(255, 0, 0),10)
-        elif paintmode==2:
-            pen = QtGui.QPen(QtGui.QColor(0, 255, 0),10)
-        elif paintmode==3:
-            pen = QtGui.QPen(QtGui.QColor(0, 0, 255),10)
-        else:
-            pen = QtGui.QPen(QtGui.QColor(255, 255, 255),10)
-
-        # クリック開始
-        if (event.type() == QtCore.QEvent.MouseButtonPress):
-            self.points.append(event.pos())
-            self.drag = True
-        # マウスドラッグ中
-        elif (self.drag and event.type() == QtCore.QEvent.MouseMove):
-            self.points.append(event.pos())
-            detectpixmap = self.pixmap.copy()
-            self.painter.begin(detectpixmap)
-            self.painter.setPen(pen)
-            self.painter.drawPolyline(*self.points)
-            self.painter.end()
-            self.videoFrame.setPixmap(detectpixmap)
-            self.pixmap = detectpixmap
-
-
-    def paint_background_release(self):
-        self.points=[]
-        self.drag = False
 
     def select_detectionarea_by_mouse(self, event):
         u"""検知範囲のマウス選択処理."""
@@ -292,11 +252,6 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         verbose = self.verbose_checkBox.isChecked()
         return verbose
 
-    def get_learning(self):
-        u"""学習モードか？"""
-        learning = self.learning_checkBox.isChecked()
-        return learning
-
     def get_imgscale(self):
         u"""画像スケール？"""
         imgscale = float(self.imgscale_comboBox.currentText())
@@ -320,17 +275,6 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         playdir = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select folder")
         return playdir.replace('/', os.sep)
-
-    def get_csvdir(self):
-        u"""csvフォルダ選択."""
-        csvdir = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select CSV folder")
-        return csvdir.replace('/', os.sep)
-
-    def get_attachfile(self):
-        u"""CSV結合ファイルを選択."""
-        attach_file = QtWidgets.QFileDialog.getSaveFileName(self, 'Select csv file','attached_all.csv', 'CSV (*.csv)')
-        return attach_file[0]
 
     def get_device(self):
         u"""カメラデバイスを選択.0 or 1."""
@@ -381,7 +325,6 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         self.logEdit.insertPlainText("Nothing input video!\n")
         self.videoFrame.clear()
         self.detectionArea_Button.setEnabled(False)
-        self.paintBackground_Button.setEnabled(False)
         self.set_detectselect(False)
         # self.set_video(None)
 
@@ -402,7 +345,6 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         self.pixmap.fill(QtCore.Qt.black)
         self.videoFrame.setPixmap(self.pixmap)
         self.detectionArea_Button.setEnabled(True)
-        self.paintBackground_Button.setEnabled(True)
         self.set_detectselect(True)
 
     def get_filename_treeview(self, index):
@@ -420,7 +362,6 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
             self.pixmap.fill(QtCore.Qt.black)
             self.videoFrame.setPixmap(self.pixmap)
             self.detectionArea_Button.setEnabled(True)
-            self.paintBackground_Button.setEnabled(True)
             self.trackSlider.setEnabled(False)
             self.trackalllabel.setText("0:00:00")
             self.nextframeButton.setEnabled(False)

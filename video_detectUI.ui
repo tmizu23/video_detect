@@ -109,13 +109,6 @@
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="learning_checkBox">
-          <property name="text">
-           <string>学習モード</string>
-          </property>
-         </widget>
-        </item>
-        <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <property name="spacing">
            <number>0</number>
@@ -123,7 +116,7 @@
           <item>
            <widget class="QLabel" name="label_8">
             <property name="text">
-             <string>検知タイプ</string>
+             <string>表示タイプ</string>
             </property>
            </widget>
           </item>
@@ -307,22 +300,6 @@
         </property>
         <property name="text">
          <string>範囲リセット</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="paintBackground_Button">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="geometry">
-         <rect>
-          <x>216</x>
-          <y>48</y>
-          <width>61</width>
-          <height>23</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>背景分類</string>
         </property>
        </widget>
       </widget>
@@ -742,7 +719,7 @@ color: rgb(255, 255, 255);</string>
         <string/>
        </property>
        <property name="icon">
-        <iconset>
+        <iconset resource="video_detect.qrc">
          <normaloff>:/newPrefix/leftarrow114.png</normaloff>:/newPrefix/leftarrow114.png</iconset>
        </property>
       </widget>
@@ -781,7 +758,7 @@ color: rgb(255, 255, 255);</string>
         <string/>
        </property>
        <property name="icon">
-        <iconset>
+        <iconset resource="video_detect.qrc">
          <normaloff>:/newPrefix/right arrow114.png</normaloff>:/newPrefix/right arrow114.png</iconset>
        </property>
       </widget>
@@ -852,7 +829,7 @@ color: rgb(255, 255, 255);</string>
      <string>...</string>
     </property>
     <property name="icon">
-     <iconset>
+     <iconset resource="video_detect.qrc">
       <normaloff>:/newPrefix/folder265.png</normaloff>:/newPrefix/folder265.png</iconset>
     </property>
    </widget>
@@ -891,14 +868,7 @@ color: rgb(255, 255, 255);</string>
     <addaction name="separator"/>
     <addaction name="actionQuit"/>
    </widget>
-   <widget class="QMenu" name="menu">
-    <property name="title">
-     <string>データ</string>
-    </property>
-    <addaction name="actionAttach_CSV"/>
-   </widget>
    <addaction name="menuFile"/>
-   <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionQuit">

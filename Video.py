@@ -2,15 +2,9 @@
 import cv2
 import numpy as np
 import os
-import sys
 import math
 import datetime
 from os.path import join, splitext, basename
-import codecs
-#from saliency import Saliency
-#from tracking import MultipleObjectsTracker
-from OpticalFlow import MotionDetection
-from OpticalFlowForCar import MotionDetectionForCar
 from BackgroundSubtractor import BackgroundSubtractor
 
 
@@ -46,7 +40,6 @@ class Video():
         self.curpos = 0
         self.bounding = True
         self.verbose = True
-        self.learning = False  # ラベルの学習モードかどうか
         self.state = "NODETECT"  # 検知中かどうか
         self.stateBS = "NODETECT"  # bsの検知状況.jpg書き出しのため
         self.INTERVAL = 0  # self.FPS*10 # 検知間隔フレーム数(10秒、記録が連続になるように)
@@ -69,36 +62,18 @@ class Video():
         self.detecttype = None
         self.m = 0  # fps調整用変数
         self.bs = None  # BackgroundSubtractor
-        self.of = None  # OpticalFlow
-        self.label = 0  # キー入力のラベル
-        self.set_label_logfile()  # 学習ラベル用のログファイル
         self.notify("{}\nsize:{}×{} fps:{} frame:{}\n".format(self.playfile,
             self.org_width, self.org_height, self.video_fps, self.framecount))
-
-    def set_label(self, label):
-        self.label = label
-        self.of.label = label
 
     def set_detecttype(self, detecttype):
         u"""表示画像の設定."""
         self.detecttype = detecttype
-        if detecttype == "detectA":
-            learningrate = 1.0 / 10  # 500  # 150 #1.0/90 # 0だとだめ
-            self.bs = BackgroundSubtractor(learningrate)
-            self.ofc = MotionDetectionForCar(
-                self.playfile,self.FPS, self.height,labeling=self.learning, bounding=self.bounding,notify=self.notify)
-        if detecttype == "detectB":
-            learningrate = 1.0 / 10  # 500  # 150 #1.0/90 # 0だとだめ
-            self.bs = BackgroundSubtractor(learningrate)
-            self.of = MotionDetection(
-                self.playfile,self.FPS, self.height,labeling=self.learning, bounding=self.bounding,notify=self.notify)
 
-        if detecttype == "detectC":
-            if self.webcam:
-                learningrate = 1.0 / 10  # 背景差分の更新頻度
-            else:
-                learningrate = 1.0 / 10  # 150 #1.0/90 # 0だとだめ
-            self.bs = BackgroundSubtractor(learningrate, skip=5)
+        if self.webcam:
+            learningrate = 1.0 / 10  # 背景差分の更新頻度
+        else:
+            learningrate = 1.0 / 10  # 150 #1.0/90 # 0だとだめ
+        self.bs = BackgroundSubtractor(learningrate, skip=5)
 
     def get_currentframe(self, bounding):
         ok, frame = self.cap.read()
@@ -138,38 +113,19 @@ class Video():
         ##########
         # 更新処理
         ##########
-        # なにもしない
-        if self.detecttype == "detectA":
-            bframe = self.bs.apply(gframe)
-            self.ofc.apply(gframe, bframe)
-        # オプティカルフロー（トラッキング）
-        if self.detecttype == "detectB":
-            bframe = self.bs.apply(gframe)
-            self.of.apply(gframe, bframe)
         # 背景差分
-        if self.detecttype == "detectC":
-            self.bs.apply(gframe)
+        bframe = self.bs.apply(gframe)
 
         ##########
         # 検知処理
         ##########
         # 検知してからINTERVALの回数の間は、検知処理しない。
-        # ラベリングのときはINTERVALしない。
-        if (not self.learning) and self.state == "DETECT" and self.interval_count >= 0:
+        if self.state == "DETECT" and self.interval_count >= 0:
             self.interval_count -= 1
         else:
             self.interval_count = self.INTERVAL
-            if self.detecttype == "detectA":
-                self.state = self.ofc.detect(
-                    self.imgscale, self.logfile)
-                self.stateBS = self.bs.detect(gframe)
-            if self.detecttype == "detectB":
-                self.state = self.of.detect(
-                    self.imgscale, self.logfile)
-                self.stateBS = self.bs.detect(gframe)
-            if self.detecttype == "detectC":
-                self.state = self.bs.detect(gframe)
-                self.stateBS = self.state
+            self.state = self.bs.detect(gframe)
+            self.stateBS = self.state
 
         # ログ表示
         if self.verbose and self.state == "DETECT":
@@ -188,29 +144,21 @@ class Video():
         ##########
         # 検知範囲を描画（赤色）
         if self.bounding:
-            # なにもしない
+            # 検知表示
             if self.detecttype == "detectA":
-                #img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
-                img = self.ofc.draw(rframe)
-            # オプティカルフロー（トラッキング）
-            if self.detecttype == "detectB":
-                img = self.of.draw(rframe)
-                #img = self.bs.draw(img)
-            # 背景差分
-            if self.detecttype == "detectC":
                 img = self.bs.draw(rframe)
-                #img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
+            # 差分表示
+            if self.detecttype == "detectB":
+                img = cv2.cvtColor(bframe, cv2.COLOR_GRAY2BGR)
+            # 処理画像グレー表示
+            if self.detecttype == "detectC":
+                img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
 
             cv2.rectangle(img, (self.detect_left, self.detect_top), (
                 self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
         else:
             img = rframe
-        # 学習ラベル作成用表示
-        if self.learning and self.detecttype == "detectB":
-            cv2.putText(img, str(self.of.period_no), (10, 30),
-                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255))
-            cv2.putText(img, str(self.label), (40, 30),
-                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 255))
+
         # ウェブカメの場合反転（内向きカメラ用）
         # if self.webcam:
         #    rframe = cv2.flip(rframe, 1)
@@ -240,9 +188,6 @@ class Video():
         # if self.videoWriter_webcam is not None:
         #     self.videoWriter_webcam.release()
         #     self.videoWriter_webcam = None
-        if self.of is not None:
-            self.of.close()
-        self.of = None
         self.bs = None
 
     def writeout_webcam(self):
@@ -362,29 +307,13 @@ class Video():
         self.detect_mask[self.detect_top:self.detect_bottom,
                         self.detect_left:self.detect_right] = 255
 
-    def set_label_logfile(self):
-        # ログファイル.
-        if not os.path.exists(self.outdir):
-            os.makedirs(self.outdir)
-        if not self.webcam:
-            logfilename = "{}.csv".format(splitext(basename(self.playfile))[0])
-            self.logfile = join(self.outdir, logfilename)
-        else:
-            logfilename = "webcam" + datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv'
-            self.logfile = join(self.outdir, logfilename)
-
     def set_outdir(self, outdir):
         u"""出力フォルダの設定."""
         self.outdir = outdir
-        self.set_label_logfile()
 
     def set_verbose(self, verbose):
         u"""ログ出力の設定."""
         self.verbose = verbose
-
-    def set_learning(self, learning):
-        u"""学習モードの設定."""
-        self.learning = learning
 
     def set_imgscale(self, imgscale):
         u"""画像スケールの設定."""

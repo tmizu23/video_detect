@@ -2,7 +2,6 @@
 import os
 import cv2
 import numpy as np
-from MyUtil import find_exedir
 
 class BackgroundSubtractor:
 
@@ -19,8 +18,6 @@ class BackgroundSubtractor:
         self.hits = [0] * 5  # ヒット（動物の可能性）したからどうか.過去5フレームを記録
         self.hitmax = 3  # 過去5フレームの内、何フレームがhitだと検知とするか
         self.detecttype = None  # 動物の可能性を判断した条件
-        self.car_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/cars.xml")
-        # self.animal_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/animal_cascade.xml")
 
     def apply(self, gframe):
         u"""背景差分の画像更新."""
@@ -95,18 +92,9 @@ class BackgroundSubtractor:
                 #box_all.append((x_max, y_max, w_max, h_max))
                 #box_grouped, _ = cv2.groupRectangles(box_all, 1, 0.8)
                 state = self.check_detection(x_max, y_max, w_max, h_max)
-                if state == "DETECT":  # 動体検知していたら更に車、動物のチェック
-                    crop_frame = self.make_crop(gframe, x_max, y_max, w_max, h_max)
-                    cars = self.check_cars(crop_frame)
-                    if cars is not None:
-                        bounding_color = (0, 255, 255)
-                        cv2.rectangle(self.draw_frame, (x_max, y_max), (x_max + w_max, y_max + h_max), bounding_color, 2)
-
-                    # animals = self.check_animals(crop_frame)
-                    # # 動物いる！
-                    # if cars is None and animals is not None:
-                    #     #self.crop_frame = self.make_crop(frame, x_max+self.detect_left, y_max+self.detect_top, w_max, h_max)
-                    #     exist = True
+                if state == "DETECT":  # 動体検知していたら識別
+                    #ToDO: 内部で処理するか、外部で処理すること
+                    pass
                 # oldに位置を保存
                 self.oldx = x_max
                 self.oldy = y_max
@@ -142,21 +130,6 @@ class BackgroundSubtractor:
             right = width
         return frame[bottom:top, left:right].copy()
 
-    def check_cars(self, crop_frame):
-        # 車のHarr-like検知
-        cars = self.car_cascade.detectMultiScale(crop_frame, 1.1, 1)
-        if len(cars) == 0:
-            return None
-        else:
-            return cars
-    #
-    # def check_animals(self, crop_frame):
-    #     # 動物のHarr-like検知
-    #     animals = self.animal_cascade.detectMultiScale(crop_frame, 1.1, 1)
-    #     if len(animals) == 0:
-    #         return None
-    #     else:
-    #         return animals
 
     def check_hit(self, x, y, w, h):
         u"""輪郭の大きさと動きから動物の可能性を判断(タイプはA,B,C)."""

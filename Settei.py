@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-from os.path import join, splitext, basename
+from os.path import join
 import codecs
 import json
 from collections import OrderedDict
-import glob
 from MyUtil import get_actual_filename,find_rootdir
 
 class Settei():
@@ -31,7 +30,6 @@ class Settei():
             ("bounding", True),
             ("display", True),
             ("verbose", True),
-            ("learning", False),
             ("detecttype", "detectA"),
             ("imgscale", 1.0),
             ("detectionTop", 0),
