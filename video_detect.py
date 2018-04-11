@@ -26,12 +26,12 @@ from docopt import docopt
 import sys
 import os
 from os.path import join, splitext, basename
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtCore, QtGui, QtWidgets
 from View import MainView
 from Settei import Settei
 from Video import Video
 from MyUtil import find_rootdir
-
+import cv2
 class MainController():
     u"""処理クラス."""
 
@@ -47,7 +47,8 @@ class MainController():
         self.playfile = None
         self.pause = True
         self.mouseselectmode = False
-
+        self.paintselectmode = False
+        self.paintmode = 0 #背景分類のモード
         u"""設定の読み込み."""
         inidir = os.path.abspath(find_rootdir())
         setting_file = join(inidir, "settings.json")
@@ -64,6 +65,7 @@ class MainController():
             self.save_settings)
         self.main_view.actionLoad_Settings.triggered.connect(
             self.get_settings)
+        self.main_view.actionAttach_CSV.triggered.connect(self.attach_csv)
         self.main_view.outdirButton.clicked.connect(self.set_outdir)
         self.main_view.playButton.clicked.connect(self.control_video)
         self.main_view.nextframeButton.clicked.connect(self.step_nextframe)
@@ -108,20 +110,36 @@ class MainController():
             self.check_detectionarea)
         self.main_view.detectionArea_Button.clicked.connect(
             self.active_mouseselect)
-        self.main_view.videoFrame.mousePressEvent = self.set_detectionarea_by_mouse
-        self.main_view.videoFrame.mouseReleaseEvent = self.set_detectionarea_by_mouse
-        self.main_view.videoFrame.mouseMoveEvent = self.set_detectionarea_by_mouse
+        self.main_view.paintBackground_Button.clicked.connect(
+            self.active_paintselect)
+        self.main_view.videoFrame.mousePressEvent = self.set_area_by_mouse
+        self.main_view.videoFrame.mouseReleaseEvent = self.set_area_by_mouse
+        self.main_view.videoFrame.mouseMoveEvent = self.set_area_by_mouse
         self.main_view.keyPressEvent = self.set_label
         self.main_view.imgscale_comboBox.currentIndexChanged.connect(self.set_imgscale)
+        self.main_view.clearlog_pushButton.clicked.connect(self.clear_log)
 
     def set_label(self,event):
         key = event.key()
-        if key == QtCore.Qt.Key_1:#いる
-            self.video.set_label(1)
-        elif key == QtCore.Qt.Key_0:#いない
-            self.video.set_label(0)
-        elif key == QtCore.Qt.Key_2:#いるけど、うごかない
-            self.video.set_label(2)
+        if self.paintselectmode:
+            if key == QtCore.Qt.Key_0:#無分類
+                self.paintmode = 0
+            elif key == QtCore.Qt.Key_1:#除く（マスク）
+                self.paintmode = 1
+            elif key == QtCore.Qt.Key_2:#道路
+                self.paintmode = 2
+            elif key == QtCore.Qt.Key_3:#草
+                self.paintmode = 3
+            print(self.paintmode)
+        elif self.settei.settings["learning"]:
+            if key == QtCore.Qt.Key_1:#いる
+                self.video.set_label(1)
+            elif key == QtCore.Qt.Key_0:#いない
+                self.video.set_label(0)
+            elif key == QtCore.Qt.Key_2:#車
+                self.video.set_label(2)
+            elif key == QtCore.Qt.Key_3:#除く
+                self.video.set_label(3)
 
     def play(self, singlestep=False):
         u"""再生＆表示＆検知処理.（タイマーからループで呼び出される）."""
@@ -142,10 +160,8 @@ class MainController():
                     RGBframe = self.video.get_RGBframe()
                     self.main_view.set_frame(RGBframe)
         else:
-            # ビデオ終わりなら書き込み終了＆ログ出力＆グラフ出力
+            # ビデオ終わりなら書き込み終了
             self.video.close_video()
-            filename = join(self.settei.settings["outdir"], 'result.csv')
-            self.video.writeout_result(filename)
             # 次のファイルを確認＆変更
             if len(self.playlist) > self.playnumber + 1:
                 # ファイル残っていたら次のビデオを再生
@@ -320,7 +336,8 @@ class MainController():
         self.video.set_learning(self.settei.settings["learning"])
         self.video.set_detecttype(self.settei.settings["detecttype"])
         framecount = self.video.get_framecount()
-        self.main_view.set_video_view(playfile, framecount)
+        fps = self.video.get_fps()
+        self.main_view.set_video_view(playfile, framecount, fps)
         top = self.settei.settings["detectionTop"]
         bottom = self.settei.settings["detectionBottom"]
         left = self.settei.settings["detectionLeft"]
@@ -423,6 +440,7 @@ class MainController():
         u"""設定の保存."""
         self.settei.load_settings(setting_file)
         self.main_view.set_settings(self.settei)
+        top, bottom, left, right = self.main_view.get_detectionarea()
         if self.settei.settings["webcam"]:
             device = self.settei.settings["device"]
             self.set_webcam(device)
@@ -446,7 +464,7 @@ class MainController():
             self.settei.settings["speedSlider"] = speedvalue
             interval = 0
             if self.video is not None:
-                interval = speed * self.video.get_fps()
+                interval = 1000 * speed / self.video.get_fps()
         self._timer.setInterval(interval)
 
     def set_bounding(self):
@@ -522,23 +540,69 @@ class MainController():
         if self.video is not None:
             self.video.set_detecttype("detectC")
 
-    def set_detectionarea_by_mouse(self, event):
-        u"""検出範囲をマウスで選択."""
-        if self.video and self.mouseselectmode:
-            if (event.type() != QtCore.QEvent.MouseButtonRelease):
-                self.main_view.select_detectionarea_by_mouse(event)
-            elif (event.type() == QtCore.QEvent.MouseButtonRelease):
-                height, width = self.video.get_size()
-                self.main_view.set_detectionarea_by_mouse(event, height)
-                self.check_detectionarea()
-                self.mouseselectmode = False
+    def set_area_by_mouse(self, event):
+        u"""検出範囲or背景分類範囲をマウスで選択."""
+        if self.video:
+            if self.paintselectmode:
+                if (event.type() != QtCore.QEvent.MouseButtonRelease):
+                    self.main_view.paint_background(event,self.paintmode)
+                elif (event.type() == QtCore.QEvent.MouseButtonRelease):
+                    self.main_view.paint_background_release()
+            elif self.mouseselectmode:
+                if (event.type() != QtCore.QEvent.MouseButtonRelease):
+                    self.main_view.select_detectionarea_by_mouse(event)
+                elif (event.type() == QtCore.QEvent.MouseButtonRelease):
+                    height, width = self.video.get_size()
+                    self.main_view.set_detectionarea_by_mouse(event,height)
+                    self.check_detectionarea()
+                    self.mouseselectmode = False
+
+    def active_paintselect(self):
+        u"""背景分類のマウス選択を有効化."""
+        if self.paintselectmode:
+           self.main_view.set_paintselect(False)
+           self.paintselectmode = False
+        else:
+           self.main_view.set_paintselect(True)
+           self.paintselectmode = True
 
     def active_mouseselect(self):
         u"""検知範囲のマウス選択を有効化."""
         self.mouseselectmode = True
         self.main_view.set_mouseselect(False)
 
+    def clear_log(self):
+        u"""ログを消去."""
+        self.main_view.clear_log()
 
+
+    def writeout_csv(self,csvfile,fout,init_once):
+        u"""CSVファイルを読み込み書き出す"""
+        f = open(csvfile)
+        if init_once:
+          fout.write(f.readline())
+        else:
+          f.readline()
+        for line in f:
+             fout.write(line.replace("\\", "/"))
+        f.close()
+
+    def attach_csv(self):
+        u"""フォルダのCSVファイルをすべて結合する."""
+        csvdir = self.main_view.get_csvdir()
+        if csvdir:
+            attach_file = self.main_view.get_attachfile()
+            if attach_file:
+                fout = open(attach_file, 'w')
+                init_once = True
+                for root, dirs, files in os.walk(csvdir):
+                    for file in files:
+                        if file.lower().endswith('_l.csv'):
+                                csvfile = os.path.join(root,file)
+                                self.writeout_csv(csvfile,fout,init_once)
+                                init_once=False
+                fout.close()
+                QtGui.QMessageBox.information(None, "Message", u"結合完了しました。", QtGui.QMessageBox.Ok)
 class CuiController():
     u"""Cuiコントローラークラス."""
 
@@ -598,8 +662,10 @@ class CuiController():
         bottom = self.settei.settings["detectionBottom"]
         left = self.settei.settings["detectionLeft"]
         right = self.settei.settings["detectionRight"]
-        self.video.set_detectionarea(top, bottom, left, right)
+        #順番大事
         self.video.set_imgscale(self.settei.settings["imgscale"])
+        self.video.set_detectionarea(top, bottom, left, right)
+
 
     def set_webcam_cli(self):
         u"""カメラの初期設定."""
@@ -616,8 +682,10 @@ class CuiController():
             bottom = self.settei.settings["detectionBottom"]
             left = self.settei.settings["detectionLeft"]
             right = self.settei.settings["detectionRight"]
-            self.video.set_detectionarea(top, bottom, left, right)
+            #順番大事
             self.video.set_imgscale(self.settei.settings["imgscale"])
+            self.video.set_detectionarea(top, bottom, left, right)
+
         else:
             print("No connected with WebCam !")
             sys.exit()
@@ -666,7 +734,7 @@ if __name__ == '__main__':
         settei = Settei()
         cui_ctrl = CuiController(settei)
     else:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
         settei = Settei()
         main_view = MainView()
         main_ctrl = MainController(settei, main_view)

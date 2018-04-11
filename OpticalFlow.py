@@ -6,12 +6,14 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.distance import pdist, squareform
 import pickle
 from MyUtil import find_exedir
-
-
+import datetime
+from os.path import basename
 class MotionDetection():
 
-    def __init__(self, fps, height, labeling, bounding):
+    def __init__(self, playfile,fps, height, labeling, bounding, notify):
         u"""パラメータ初期設定."""
+        self.notify = notify #GUIログ通知
+        self.playfile = playfile #ログ用
         self.height = height  # ログ書き出し用に必要
         self.FRAME = fps * 5  # 判定するフレーム数(5秒)
         self.RANDOMPOINTS = 50  # 1フレームで背景差分に打つポイント数
@@ -39,7 +41,7 @@ class MotionDetection():
         self.logfile_l = None  # ラベル用ログファイル
         self.logfile_p = None  # ポイント位置ログファイル
         self.clf = pickle.load(
-            open(find_exedir() + os.sep + "data/model.pkl", 'rb'))  # 学習モデル
+            open(find_exedir() + os.sep + "data/animal.pkl", 'rb'))  # 学習モデル
 
     def close(self):
         if self.logfile_p is not None:
@@ -115,6 +117,9 @@ class MotionDetection():
             dist_filter = (MIN_DIST < distance)
             self.stack_points = np.vstack(
                 (self.stack_points, cp_new[dist_filter]))
+            ###count入れて3次元クラスタリング
+
+            ###
             self.old_points = np.vstack((self.old_points, cp_old[dist_filter]))
             self.stack_direction = np.vstack(
                 (self.stack_direction, direction[dist_filter].reshape(-1, 1)))
@@ -125,12 +130,12 @@ class MotionDetection():
                 for (a, b) in cp_new[dist_filter]:
                     cv2.circle(self.draw_frame, (a, b), 1, (0, 0, 255), -1)
 
-            # logfile_p書き出し
-            if self.labeling:
-                for x, y, dist, dire in zip(cp_new[:, 0], cp_new[:, 1], distance, direction):
-                    y = self.height - y
-                    self.logfile_p.write("{0:.0f},{1:.0f},{2:.0f},{3:.0f},{4:.0f}\n".format(
-                        x, y, dist, dire, self.count))
+            # # logfile_p書き出し(分析時コメントアウト)
+            # if self.labeling:
+            #     for x, y, dist, dire in zip(cp_new[:, 0], cp_new[:, 1], distance, direction):
+            #         y = self.height - y
+            #         self.logfile_p.write("{0:.0f},{1:.0f},{2:.0f},{3:.0f},{4:.0f}\n".format(
+            #             x, y, dist, dire, self.count))
 
         # 90フレーム(18fps：5秒間)に動いたポイントデータをクラスタリングして分析
         if(self.count % self.FRAME == 0):
@@ -186,7 +191,7 @@ class MotionDetection():
                         [abs(hist[i] - hist[i + 8]) for i in range(8)])
                     max_direction[cl] = np.argmax(hist) * 22.5
                     max_direccount[cl] = np.max(hist)
-                    # 最外郭、長軸、クラスタ中心の描画
+                    # 最外郭、長軸、クラスタ中心の描画(分析時コメントアウトはずす)
                     if self.bounding and not self.labeling:
                         cv2.polylines(self.draw_frame, [np.int32(
                             points[hull.vertices].reshape(-1, 1, 2))], True, col[cl], 2)
@@ -212,20 +217,32 @@ class MotionDetection():
                 cl_meandist = np.int(np.mean(pairdist))
             else:
                 cl_meandist = 0
-
-            # 手動判定
-            # if (long_axis > 100).any() and (directivity > 70).any():
-            #     label = 1
+            # 撮影時間
+            if isinstance(self.playfile,str): #webcamじゃないなら
+                #ファイルの作成時刻（長時間の場合もあるかもしれないけど気にしない）
+                #dt = datetime.datetime.fromtimestamp(os.stat(self.playfile).st_mtime)
+                #hour = int(dt.strftime('%H'))
+                #作成時刻が更新されているため、ファイル名から抜き出し
+                hour = 0#int(basename(self.playfile).split('_')[2][:2])
+            else:
+                #webacmなら現在時刻
+                hour = int(datetime.datetime.now().strftime('%H'))
+            # # 手動判定
+            # if (long_axis > 100).any() and ((60 < axis_direction) & (axis_direction < 120)).any():
+            #     print(long_axis[long_axis > 100])
+            #     print("car!!!")
             # else:
-            #     label = 0
+            #     pass
             # 学習データのラベリング
             if self.labeling:
                 label = self.label
             else:
                 # 機械学習判定
                 if cl_count > 0:
-                    X = [cl_count, cl_meandist]
-                    for i in range(2):  # モデルで使ったクラス数で評価
+                    # テストデータは時間が偏っているので入れない。
+                    X = [hour, cl_count, cl_meandist]
+                    #X = [cl_count, cl_meandist]
+                    for i in range(2):  # モデルで使ったクラス数で評価 今回は1クラス
                         X.extend((point_count[i], area[i], perimeter[i], long_axis[i], axis_direction[
                                  i], directivity[i], max_direction[i], max_direccount[i]))
                     X = np.vstack(X).T
@@ -235,24 +252,28 @@ class MotionDetection():
             # ログ書き出し
 
             if self.labeling:
-                print("{},{},{},{},".format(
-                    self.period_no, label, cl_count, cl_meandist))
-                self.logfile_l.write("{},{},{},{},".format(
-                    self.period_no, label, cl_count, cl_meandist))
-                # クラスをareaで降順にソートして、クラス情報を出力
-                areaindexlist = np.argsort(area)[::-1]
-                for i in areaindexlist:
-                    print("{},{},{},{},{},{},{},{},".format(point_count[i], area[i], perimeter[i], long_axis[
-                          i], axis_direction[i], directivity[i], max_direction[i], max_direccount[i]))
-                    self.logfile_l.write("{},{},{},{},{},{},{},{},".format(point_count[i], area[i], perimeter[
-                                         i], long_axis[i], axis_direction[i], directivity[i], max_direction[i], max_direccount[i]))
-                self.logfile_l.write("\n")
+                print("{},{},{},{},{},".format(
+                    self.period_no, label, hour,cl_count, cl_meandist))
+            self.notify("[{}]:{}\n".format(self.period_no, label))
+            self.logfile_l.write("{},{},{},{},{},{},".format(
+                self.playfile, self.period_no, label, hour, cl_count, cl_meandist))
+            # クラスをareaで降順にソートして、クラス情報を出力
+            areaindexlist = np.argsort(area)[::-1]
+            for i in areaindexlist:
+                #print("{},{},{},{},{},{},{},{},".format(point_count[i], area[i], perimeter[i], long_axis[
+                #      i], axis_direction[i], directivity[i], max_direction[i], max_direccount[i]))
+                self.logfile_l.write("{},{},{},{},{},{},{},{},".format(point_count[i], area[i], perimeter[
+                                     i], long_axis[i], axis_direction[i], directivity[i], max_direction[i], max_direccount[i]))
+            self.logfile_l.write("\n")
+            self.logfile_l.flush()
+
+
             self.period_no += 1
             # 期間用変数の初期化
             self.stack_points = np.zeros((1, 2), dtype=np.float32)
             self.old_points = np.zeros((1, 2), dtype=np.float32)
             self.stack_direction = np.zeros((1, 1), dtype=np.float32)
-            self.count = 0
+            #self.count = 0
 
             # 判定
             if label == 1:
@@ -262,13 +283,16 @@ class MotionDetection():
 
     def detect(self, imgscale, logfile):
         state = "NODETECT"
-        if self.labeling and self.logfile_l is None:
-            # ポイント解析用
-            self.logfile_p = open(logfile.replace('.csv', '_p.csv'), "w")
-            self.logfile_p.write("x,y,dist,dire,pos\n")
-            # 学習用
-            self.logfile_l = open(logfile.replace('.csv', '_l.csv'), "w")
-            self.logfile_l.write("期間番号,ラベル,クラス数,平均クラス間距離,")
+        if self.logfile_l is None:
+            fname = logfile.replace('.csv', '_l.csv')
+            if os.path.exists(fname):#同じファイル名があったら(1)のようにする
+                i=1
+                fname = fname.replace('_l.csv', '(' + str(i) + ')_l.csv')
+                while os.path.exists(fname):
+                    fname = fname.replace('(' + str(i) + ')_l.csv', '(' + str(i+1) + ')_l.csv')
+                    i+=1
+            self.logfile_l = open(fname, "w")
+            self.logfile_l.write("ファイル,期間番号,ラベル,撮影時刻,クラス数,平均クラス間距離,")
             self.logfile_l.write(
                 "ポイント数_1,面積_1,周長_1,長軸_1,長軸方向_1,指向性_1,最大方向_1,最大方向数_1,")
             self.logfile_l.write(
@@ -279,6 +303,10 @@ class MotionDetection():
                 "ポイント数_4,面積_4,周長_4,長軸_4,長軸方向_4,指向性_4,最大方向_4,最大方向数_4,")
             self.logfile_l.write(
                 "ポイント数_5,面積_5,周長_5,長軸_5,長軸方向_5,指向性_5,最大方向_5,最大方向数_5,\n")
+        # if self.labeling and self.logfile_p is None:
+        #     # ポイント解析用.分析するときにコメントアウトはずす
+        #     self.logfile_p = open(logfile.replace('.csv', '_p.csv'), "w")
+        #     self.logfile_p.write("x,y,dist,dire,pos\n")
 
         # 動物の検知
         state = self.check_animal()

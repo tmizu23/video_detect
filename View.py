@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtCore, QtGui, QtWidgets
 from video_detectUI import Ui_MainWindow
 import os
 import datetime
 
-class MainView(QtGui.QMainWindow, Ui_MainWindow):
+class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
     u"""GUIのクラス."""
 
     def __init__(self, parent=None):
@@ -16,7 +16,8 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         # 変数
         self.painter = QtGui.QPainter()
-        self.model = QtGui.QDirModel()
+        self.model = QtWidgets.QDirModel()
+        self.points=[]
         # GUIの初期設定
         self.setFixedSize(self.width(), self.height())
         self.model.setFilter(
@@ -60,8 +61,6 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.display_checkBox.setChecked(settei.settings["display"])
         self.verbose_checkBox.setChecked(settei.settings["verbose"])
         self.learning_checkBox.setChecked(settei.settings["learning"])
-        imgscaleindex = self.imgscale_comboBox.findText(str(settei.settings["imgscale"]))
-        self.imgscale_comboBox.setCurrentIndex(imgscaleindex)
         if settei.settings["detecttype"] == "detectA":
            self.detectA_radioButton.setChecked(True)
         elif settei.settings["detecttype"] == "detectB":
@@ -74,6 +73,9 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.detectionLeft_Edit.setText(str(settei.settings["detectionLeft"]))
         self.detectionRight_Edit.setText(
             str(settei.settings["detectionRight"]))
+        #順番大事（スケール設定は、範囲設定のあと。スケールを設定するとアクションが作動するので）
+        imgscaleindex = self.imgscale_comboBox.findText(str(settei.settings["imgscale"]))
+        self.imgscale_comboBox.setCurrentIndex(imgscaleindex)
         self.speedSlider.setValue(settei.settings["speedSlider"])
         self.outdirEdit.setText(settei.settings["outdir"])
         self.set_playdir(settei.settings["playdir"])
@@ -132,15 +134,54 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
     def set_detectselect(self, state):
         u"""検知選択関連を設定."""
         self.detectionArea_Button.setEnabled(state)
+        self.paintBackground_Button.setEnabled(state)
         self.detectionTop_Edit.setEnabled(state)
         self.detectionBottom_Edit.setEnabled(state)
         self.detectionLeft_Edit.setEnabled(state)
         self.detectionRight_Edit.setEnabled(state)
         self.resetArea_Button.setEnabled(state)
 
+    def set_paintselect(self, state):
+        u"""背景分類のマウス選択を設定."""
+        if state:
+            self.paintBackground_Button.setText("選択終了")
+        else:
+            self.paintBackground_Button.setText("背景分類")
+
     def set_mouseselect(self, state):
         u"""検知範囲のマウス選択を設定."""
         self.detectionArea_Button.setEnabled(state)
+
+    def paint_background(self, event, paintmode):
+        u"""検知範囲のマウス選択処理."""
+        if paintmode==1:
+            pen = QtGui.QPen(QtGui.QColor(255, 0, 0),10)
+        elif paintmode==2:
+            pen = QtGui.QPen(QtGui.QColor(0, 255, 0),10)
+        elif paintmode==3:
+            pen = QtGui.QPen(QtGui.QColor(0, 0, 255),10)
+        else:
+            pen = QtGui.QPen(QtGui.QColor(255, 255, 255),10)
+
+        # クリック開始
+        if (event.type() == QtCore.QEvent.MouseButtonPress):
+            self.points.append(event.pos())
+            self.drag = True
+        # マウスドラッグ中
+        elif (self.drag and event.type() == QtCore.QEvent.MouseMove):
+            self.points.append(event.pos())
+            detectpixmap = self.pixmap.copy()
+            self.painter.begin(detectpixmap)
+            self.painter.setPen(pen)
+            self.painter.drawPolyline(*self.points)
+            self.painter.end()
+            self.videoFrame.setPixmap(detectpixmap)
+            self.pixmap = detectpixmap
+
+
+    def paint_background_release(self):
+        self.points=[]
+        self.drag = False
 
     def select_detectionarea_by_mouse(self, event):
         u"""検知範囲のマウス選択処理."""
@@ -161,7 +202,7 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
             self.painter.end()
             self.videoFrame.setPixmap(detectpixmap)
 
-    def set_detectionarea_by_mouse(self, event, height):
+    def set_detectionarea_by_mouse(self, event,height):
         u"""検知範囲のマウス選択処理."""
         x = event.pos().x()
         y = event.pos().y()
@@ -270,31 +311,42 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
 
     def get_outdir(self):
         u"""出力フォルダを返す."""
-        outdir = QtGui.QFileDialog.getExistingDirectory(
+        outdir = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select Output folder")
-        return outdir
+        return outdir.replace('/', os.sep)
 
     def get_playdir(self):
         u"""再生ビデオフォルダ選択.プレイリストをセット."""
-        playdir = QtGui.QFileDialog.getExistingDirectory(
+        playdir = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select folder")
-        return playdir
+        return playdir.replace('/', os.sep)
+
+    def get_csvdir(self):
+        u"""csvフォルダ選択."""
+        csvdir = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Select CSV folder")
+        return csvdir.replace('/', os.sep)
+
+    def get_attachfile(self):
+        u"""CSV結合ファイルを選択."""
+        attach_file = QtWidgets.QFileDialog.getSaveFileName(self, 'Select csv file','attached_all.csv', 'CSV (*.csv)')
+        return attach_file[0]
 
     def get_device(self):
         u"""カメラデバイスを選択.0 or 1."""
-        num, ok = QtGui.QInputDialog.getInt(
+        num, ok = QtWidgets.QInputDialog.getInt(
             self, "Input device number", "device:", 0, 0, 1)
         return num, ok
 
     def get_loadfile(self):
         u"""設定ファイル（読み込み用）を選択."""
-        setting_file = QtGui.QFileDialog.getOpenFileName(self, 'Open file','', 'JSON (*.json)')
-        return setting_file
+        setting_file = QtWidgets.QFileDialog.getOpenFileName(self, 'Open file','', 'JSON (*.json)')
+        return setting_file[0]
 
     def get_savefile(self):
         u"""設定ファイル（保存用）を選択."""
-        setting_file = QtGui.QFileDialog.getSaveFileName(self, 'Select file','settings.json', 'JSON (*.json)')
-        return setting_file
+        setting_file = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','settings.json', 'JSON (*.json)')
+        return setting_file[0]
 
     def set_playdir(self, playdir):
         u"""プレイリストをセット."""
@@ -329,22 +381,28 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
         self.logEdit.insertPlainText("Nothing input video!\n")
         self.videoFrame.clear()
         self.detectionArea_Button.setEnabled(False)
+        self.paintBackground_Button.setEnabled(False)
         self.set_detectselect(False)
         # self.set_video(None)
 
-    def set_video_view(self, filename, framecount):
+    def set_video_view(self, filename, framecount,fps):
         u"""再生ビデオを変更＆初期設定."""
         model = self.treeView.model()
         index = model.index(filename)
-        self.treeView.scrollTo(index, QtGui.QAbstractItemView.PositionAtCenter)
+        self.treeView.scrollTo(index, QtWidgets.QAbstractItemView.PositionAtCenter)
         self.treeView.selectionModel().clearSelection()
         self.treeView.selectionModel().select(
-            index, QtGui.QItemSelectionModel.Select | QtGui.QItemSelectionModel.Rows)
+            index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
         self.trackSlider.setMaximum(framecount)
+        d = datetime.timedelta(seconds=int(
+            framecount / fps))
+        self.trackalllabel.setText(str(d))
+
         self.trackSlider.setValue(0)
         self.pixmap.fill(QtCore.Qt.black)
         self.videoFrame.setPixmap(self.pixmap)
         self.detectionArea_Button.setEnabled(True)
+        self.paintBackground_Button.setEnabled(True)
         self.set_detectselect(True)
 
     def get_filename_treeview(self, index):
@@ -362,7 +420,9 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
             self.pixmap.fill(QtCore.Qt.black)
             self.videoFrame.setPixmap(self.pixmap)
             self.detectionArea_Button.setEnabled(True)
+            self.paintBackground_Button.setEnabled(True)
             self.trackSlider.setEnabled(False)
+            self.trackalllabel.setText("0:00:00")
             self.nextframeButton.setEnabled(False)
             self.nextvideoButton.setEnabled(False)
             self.previousvideoButton.setEnabled(False)
@@ -397,3 +457,7 @@ class MainView(QtGui.QMainWindow, Ui_MainWindow):
     def write_log(self, str):
         u"""ログ表示."""
         self.logEdit.insertPlainText(str)
+
+    def clear_log(self):
+        u"""ログ消去."""
+        self.logEdit.clear()

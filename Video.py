@@ -10,6 +10,7 @@ import codecs
 #from saliency import Saliency
 #from tracking import MultipleObjectsTracker
 from OpticalFlow import MotionDetection
+from OpticalFlowForCar import MotionDetectionForCar
 from BackgroundSubtractor import BackgroundSubtractor
 
 
@@ -35,7 +36,7 @@ class Video():
         self.org_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.width = int(self.org_width * self.imgscale)  # 処理サイズ
         self.height = int(self.org_height * self.imgscale)  # 処理サイズ
-        self.detect_mask = np.zeros((self.height, self.width),dtype=np.uint8) # 検知範囲のマスク
+        self.detect_mask = np.ones((self.height, self.width),dtype=np.uint8) # 検知範囲のマスク
         self.framecount = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.video_fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.detect_left = 0
@@ -71,7 +72,7 @@ class Video():
         self.of = None  # OpticalFlow
         self.label = 0  # キー入力のラベル
         self.set_label_logfile()  # 学習ラベル用のログファイル
-        self.notify("size:{}×{} fps:{} frame:{}\n".format(
+        self.notify("{}\nsize:{}×{} fps:{} frame:{}\n".format(self.playfile,
             self.org_width, self.org_height, self.video_fps, self.framecount))
 
     def set_label(self, label):
@@ -82,12 +83,16 @@ class Video():
         u"""表示画像の設定."""
         self.detecttype = detecttype
         if detecttype == "detectA":
-            pass
+            learningrate = 1.0 / 10  # 500  # 150 #1.0/90 # 0だとだめ
+            self.bs = BackgroundSubtractor(learningrate)
+            self.ofc = MotionDetectionForCar(
+                self.playfile,self.FPS, self.height,labeling=self.learning, bounding=self.bounding,notify=self.notify)
         if detecttype == "detectB":
             learningrate = 1.0 / 10  # 500  # 150 #1.0/90 # 0だとだめ
             self.bs = BackgroundSubtractor(learningrate)
             self.of = MotionDetection(
-                self.FPS, self.height,labeling=self.learning, bounding=self.bounding)
+                self.playfile,self.FPS, self.height,labeling=self.learning, bounding=self.bounding,notify=self.notify)
+
         if detecttype == "detectC":
             if self.webcam:
                 learningrate = 1.0 / 10  # 背景差分の更新頻度
@@ -108,6 +113,7 @@ class Video():
     def process_nextframe(self):
         u"""ビデオフレーム読み込み＆処理."""
         self.state = "NODETECT"
+        self.stateBS = "NODETECT"
         self.cursec = int(self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
         self.curpos = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
         ok, frame = self.cap.read()
@@ -123,23 +129,19 @@ class Video():
             self.m = self.m + (self.video_fps / self.FPS)
         # リサイズ
         rframe = cv2.resize(frame, (self.width, self.height))
-        # 切り出し
-        #cframe = rframe[self.detect_top:self.detect_bottom,
-        #                self.detect_left:self.detect_right]
-        cframe = rframe
+        gframe = cv2.bitwise_and(rframe,rframe,mask=self.detect_mask) #検知範囲でマスク
         # グレー化&ヒストグラム平坦化（明るさの変化を抑えるため）
-        gframe = cv2.cvtColor(cframe, cv2.COLOR_BGR2GRAY)
-        #gframe = cv2.fastNlMeansDenoising(gframe, None,10,7,21)
+        gframe = cv2.cvtColor(gframe, cv2.COLOR_BGR2GRAY)
         gframe = cv2.GaussianBlur(gframe, (5, 5), 0)  # 映像ノイズ削除
         gframe = cv2.equalizeHist(gframe)
-        gframe = cv2.bitwise_and(gframe,gframe,self.detect_mask)
-        #gframe = self.detect_mask
+
         ##########
         # 更新処理
         ##########
         # なにもしない
         if self.detecttype == "detectA":
-            pass
+            bframe = self.bs.apply(gframe)
+            self.ofc.apply(gframe, bframe)
         # オプティカルフロー（トラッキング）
         if self.detecttype == "detectB":
             bframe = self.bs.apply(gframe)
@@ -158,13 +160,16 @@ class Video():
         else:
             self.interval_count = self.INTERVAL
             if self.detecttype == "detectA":
-                pass
+                self.state = self.ofc.detect(
+                    self.imgscale, self.logfile)
+                self.stateBS = self.bs.detect(gframe)
             if self.detecttype == "detectB":
                 self.state = self.of.detect(
                     self.imgscale, self.logfile)
                 self.stateBS = self.bs.detect(gframe)
             if self.detecttype == "detectC":
                 self.state = self.bs.detect(gframe)
+                self.stateBS = self.state
 
         # ログ表示
         if self.verbose and self.state == "DETECT":
@@ -185,38 +190,38 @@ class Video():
         if self.bounding:
             # なにもしない
             if self.detecttype == "detectA":
-                cframe = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
-                img = cframe
+                #img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
+                img = self.ofc.draw(rframe)
             # オプティカルフロー（トラッキング）
             if self.detecttype == "detectB":
-                img = self.of.draw(cframe)
+                img = self.of.draw(rframe)
                 #img = self.bs.draw(img)
             # 背景差分
             if self.detecttype == "detectC":
-                img = self.bs.draw(cframe)
-            # 検知領域
-            #rframe[self.detect_top:self.detect_bottom,
-            #       self.detect_left:self.detect_right] = img
-            rframe = img
-            cv2.rectangle(rframe, (self.detect_left, self.detect_top), (
-                self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
+                img = self.bs.draw(rframe)
+                #img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
 
+            cv2.rectangle(img, (self.detect_left, self.detect_top), (
+                self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
+        else:
+            img = rframe
         # 学習ラベル作成用表示
         if self.learning and self.detecttype == "detectB":
-            cv2.putText(rframe, str(self.of.period_no), (10, 30),
+            cv2.putText(img, str(self.of.period_no), (10, 30),
                         cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255))
-            cv2.putText(rframe, str(self.label), (40, 30),
+            cv2.putText(img, str(self.label), (40, 30),
                         cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 255))
         # ウェブカメの場合反転（内向きカメラ用）
         # if self.webcam:
         #    rframe = cv2.flip(rframe, 1)
 
         self.frame = frame  # 書き出し用
-        self.view_frame = rframe  # 表示用
+        self.view_frame = img  # 表示用
+        #cv2.imshow("debug",self.view_frame)
         # 最新フレーム(数秒)を一時的に保存
         self.frames.append(self.frame)
         self.times.append(cv2.getTickCount())
-        self.states.append(self.stateBS)
+        self.states.append(self.stateBS) #BSでの検知状況.jpg書き出し用
         if len(self.frames) > self.BEFORE_VIDEO_LENGTH + self.AFTER_VIDEO_LENGTH:
             del self.frames[0]
             del self.times[0]
@@ -230,14 +235,12 @@ class Video():
 
     def close_video(self):
         u"""動画書き込みのクローズ."""
-        if self.videoWriter is not None:
-            #self.writing = False
-            # self.videoWriter.release()
-            #self.videoWriter = None
-            self.of.close()
-        if self.videoWriter_webcam is not None:
-            self.videoWriter_webcam.release()
-            self.videoWriter_webcam = None
+        self.video_count = -1
+        self.writeout_video()
+        # if self.videoWriter_webcam is not None:
+        #     self.videoWriter_webcam.release()
+        #     self.videoWriter_webcam = None
+        if self.of is not None:
             self.of.close()
         self.of = None
         self.bs = None
@@ -302,9 +305,9 @@ class Video():
             if not os.path.exists(self.outdir):
                 os.makedirs(self.outdir)
             # フレーム全体なら
-            #idx = [i for i, x in enumerate(self.states) if x == "DETECT"]
+            idx = [i for i, x in enumerate(self.states) if x == "DETECT"]
             # 最初のフレームだけ
-            idx = [self.states.index("DETECT")]
+            #idx = [self.states.index("DETECT")]
             for i, x in enumerate(idx):
                 if self.webcam:
                     self.webcam_savetime = dt.strftime('%Y%m%d_%H%M%S')
@@ -333,29 +336,6 @@ class Video():
                 #cv2.imwrite(outfile, self.frame)
                 #cv2.imwrite(outfile_crop, self.crop_frame)
 
-    def writeout_result(self, outfile):
-        u"""ログ書き出し."""
-        # 時間ごとの記録にする？ビデオ全体でいたかどうかのフラグ必要。
-        if not os.path.exists(outfile):
-            datastr = ",".join(
-                [u"ファイル名", u"検知", u"撮影時刻(24h)"])
-            f = codecs.open(outfile, 'w', 'cp932')
-            f.write(datastr + '\n')
-            f.close()
-            logstr = datastr.replace(',', '\t') + '\n'
-            self.notify(logstr)
-
-        # ToDo 昼夜の判定は、ファイルの作成時刻から。入れるなら。
-        dt = datetime.datetime.fromtimestamp(os.stat(self.playfile).st_mtime)
-        hour = dt.strftime('%H')
-        datastr = ",".join(
-            [self.playfile, str(""), hour])
-        f = codecs.open(outfile, 'a', 'cp932')
-        f.write(datastr + '\n')
-        f.close()
-        logstr = datastr.replace(',', '\t') + '\n'
-        self.notify(logstr)
-
     def check_webcam(self):
         u"""Webcamがあるか確認"""
         ret = True
@@ -378,6 +358,7 @@ class Video():
         self.detect_bottom = bottom
         self.detect_left = left
         self.detect_right = right
+        self.detect_mask *= 0
         self.detect_mask[self.detect_top:self.detect_bottom,
                         self.detect_left:self.detect_right] = 255
 

@@ -10,7 +10,8 @@ class BackgroundSubtractor:
         u"""パラメータの初期化."""
         self.learningrate = learningrate
         self.fgbg = cv2.createBackgroundSubtractorKNN(history=0,
-            dist2Threshold=20, detectShadows=0)  # 背景差分設定
+           dist2Threshold=20, detectShadows=0)  # 背景差分設定
+        #self.fgbg = cv2.bgsegm.createBackgroundSubtractorGSOC()
         self.skip = skip
         self.count = 0  # ビデオの最初をスキップ
         self.bframe = None
@@ -18,11 +19,12 @@ class BackgroundSubtractor:
         self.hits = [0] * 5  # ヒット（動物の可能性）したからどうか.過去5フレームを記録
         self.hitmax = 3  # 過去5フレームの内、何フレームがhitだと検知とするか
         self.detecttype = None  # 動物の可能性を判断した条件
-        self.car_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/car_cascade.xml")
-        self.animal_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/animal_cascade.xml")
+        self.car_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/cars.xml")
+        # self.animal_cascade = cv2.CascadeClassifier(find_exedir()+ os.sep + "data/animal_cascade.xml")
 
     def apply(self, gframe):
         u"""背景差分の画像更新."""
+        self.draw_frame = np.zeros((gframe.shape[0], gframe.shape[1], 3))
         bframe = self.fgbg.apply(gframe, learningRate=self.learningrate)
         if self.count > self.skip:
             if bframe is None:
@@ -76,10 +78,10 @@ class BackgroundSubtractor:
         w_max = 0
         h_max = 0
         if self.bframe is not None:
+
             # 動体の輪郭抽出
             _, cnts, _ = cv2.findContours(
                 self.bframe.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
             if len(cnts) > 0:
                 # 動体があれば。（背景差分適応の1フレームあとから開始、又はWebCam）
 
@@ -94,14 +96,17 @@ class BackgroundSubtractor:
                 #box_grouped, _ = cv2.groupRectangles(box_all, 1, 0.8)
                 state = self.check_detection(x_max, y_max, w_max, h_max)
                 if state == "DETECT":  # 動体検知していたら更に車、動物のチェック
-                    crop_frame = self.make_crop(
-                        gframe, x_max, y_max, w_max, h_max)
+                    crop_frame = self.make_crop(gframe, x_max, y_max, w_max, h_max)
                     cars = self.check_cars(crop_frame)
-                    animals = self.check_animals(crop_frame)
-                    # 動物いる！
-                    if cars is None and animals is not None:
-                        #self.crop_frame = self.make_crop(frame, x_max+self.detect_left, y_max+self.detect_top, w_max, h_max)
-                        exist = True
+                    if cars is not None:
+                        bounding_color = (0, 255, 255)
+                        cv2.rectangle(self.draw_frame, (x_max, y_max), (x_max + w_max, y_max + h_max), bounding_color, 2)
+
+                    # animals = self.check_animals(crop_frame)
+                    # # 動物いる！
+                    # if cars is None and animals is not None:
+                    #     #self.crop_frame = self.make_crop(frame, x_max+self.detect_left, y_max+self.detect_top, w_max, h_max)
+                    #     exist = True
                 # oldに位置を保存
                 self.oldx = x_max
                 self.oldy = y_max
@@ -144,14 +149,14 @@ class BackgroundSubtractor:
             return None
         else:
             return cars
-
-    def check_animals(self, crop_frame):
-        # 動物のHarr-like検知
-        animals = self.animal_cascade.detectMultiScale(crop_frame, 1.1, 1)
-        if len(animals) == 0:
-            return None
-        else:
-            return animals
+    #
+    # def check_animals(self, crop_frame):
+    #     # 動物のHarr-like検知
+    #     animals = self.animal_cascade.detectMultiScale(crop_frame, 1.1, 1)
+    #     if len(animals) == 0:
+    #         return None
+    #     else:
+    #         return animals
 
     def check_hit(self, x, y, w, h):
         u"""輪郭の大きさと動きから動物の可能性を判断(タイプはA,B,C)."""
@@ -189,15 +194,21 @@ class BackgroundSubtractor:
 
     def draw(self, cframe):
         # 動体の輪郭が最大のものを描画（検知なら白、それ以外は青色）
-        #if self.bframe is not None:
-        #    cframe = cv2.cvtColor(self.bframe, cv2.COLOR_GRAY2BGR)
+        # if self.bframe is not None:
+        #     cframe = cv2.cvtColor(self.bframe, cv2.COLOR_GRAY2BGR)
+
         if self.exist is not None:
             bounding_color = (0, 255, 255)
         elif self.state == "DETECT":
             bounding_color = (255, 255, 255)
         else:
             bounding_color = (255, 0, 0)
-        img = cv2.rectangle(cframe, (self.oldx, self.oldy), (self.oldx +
+        cframe = cv2.rectangle(cframe, (self.oldx, self.oldy), (self.oldx +
                                                        self.oldw, self.oldy + self.oldh), bounding_color, 2)
+        if hasattr(self, "draw_frame"):
+            # draw_frameを重ね合わせ（黒以外を置き換える）
+            drawfilter = np.where((self.draw_frame[:, :, 0] != 0) | (
+                self.draw_frame[:, :, 1] != 0) | (self.draw_frame[:, :, 2] != 0))
+            cframe[drawfilter] = self.draw_frame[drawfilter]
 
-        return img
+        return cframe
