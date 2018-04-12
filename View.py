@@ -58,6 +58,7 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         self.writevideo_checkBox.setChecked(settei.settings["writevideo"])
         self.writejpg_checkBox.setChecked(settei.settings["writejpg"])
         self.bounding_checkBox.setChecked(settei.settings["bounding"])
+        self.crop_checkBox.setChecked(settei.settings["crop"])
         self.display_checkBox.setChecked(settei.settings["display"])
         self.verbose_checkBox.setChecked(settei.settings["verbose"])
         if settei.settings["detecttype"] == "detectA":
@@ -219,6 +220,11 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         u"""動体検知エリア表示するか？設定."""
         bounding = self.bounding_checkBox.isChecked()
         return bounding
+
+    def get_crop(self):
+        u"""検知エリアをクロップするか？設定."""
+        crop = self.crop_checkBox.isChecked()
+        return crop
 
     def set_writevideo(self, checked):
         u"""ビデオ書き出すか？設定."""

@@ -90,7 +90,14 @@
         <item>
          <widget class="QCheckBox" name="bounding_checkBox">
           <property name="text">
-           <string>検知エリア表示</string>
+           <string>検知エリア表示（ビデオ、画像書き出し時）</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="crop_checkBox">
+          <property name="text">
+           <string>検知範囲切り抜き（画像書き出し時）</string>
           </property>
          </widget>
         </item>

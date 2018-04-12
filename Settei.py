@@ -28,6 +28,7 @@ class Settei():
             ("writevideo", True),
             ("writejpg", True),
             ("bounding", True),
+            ("crop", True),
             ("display", True),
             ("verbose", True),
             ("detecttype", "detectA"),
@@ -78,8 +79,6 @@ class Settei():
     def save_settings(self, setting_file):
         u"""設定ファイルの書き出し."""
         inidir = get_actual_filename(find_rootdir())
-        print(inidir)
-        print(setting_file)
         f = codecs.open(join(inidir, setting_file),
                         'w', 'utf-8')  # 書き込みモードで開く
         json.dump(self.settings, f, indent=2,

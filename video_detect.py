@@ -81,6 +81,8 @@ class MainController():
             self.set_writejpg)
         self.main_view.bounding_checkBox.stateChanged.connect(
             self.set_bounding)
+        self.main_view.crop_checkBox.stateChanged.connect(
+            self.set_crop)
         self.main_view.display_checkBox.stateChanged.connect(self.set_display)
         self.main_view.verbose_checkBox.stateChanged.connect(self.set_verbose)
         self.main_view.detectA_radioButton.clicked.connect(self.set_detectA)
@@ -443,6 +445,14 @@ class MainController():
         self.settei.settings["bounding"] = bounding
         if self.video is not None:
             self.video.set_bounding(bounding)
+        self.refresh_view()
+
+    def set_crop(self):
+        u"""領域表示設定."""
+        crop = self.main_view.get_crop()
+        self.settei.settings["crop"] = crop
+        if self.video is not None:
+            self.video.set_crop(crop)
         self.refresh_view()
 
     def set_writevideo(self):

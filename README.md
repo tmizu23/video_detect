@@ -32,10 +32,15 @@
   - ファイル名は、元のファイル名＋検知時トラック秒数になります。
 
 
-#開発メモ
-##uiの変換
+開発メモ
+-----
+Qt Designerが動かないとき   
+https://qiita.com/NoTASK/items/1644e0197c84856f607a
+
+uiの変換
 - pyuic5 video_detectUI.ui -o video_detectUI.py
 - pyrcc5 video_detect.qrc -o video_detect_rc.py
+
 
 変更履歴
 ------

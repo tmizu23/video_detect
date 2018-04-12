@@ -65,11 +65,7 @@ class BackgroundSubtractor:
 
     def detect(self, gframe):
         u"""検知処理."""
-        state = "NODETECT"
-        animals = None
-        cars = None
-        exist = False
-        crop_frame = None
+        self.state = "NODETECT"
         x_max = 0
         y_max = 0
         w_max = 0
@@ -91,8 +87,8 @@ class BackgroundSubtractor:
                 (x_max, y_max, w_max, h_max) = cv2.boundingRect(cnt_max)
                 #box_all.append((x_max, y_max, w_max, h_max))
                 #box_grouped, _ = cv2.groupRectangles(box_all, 1, 0.8)
-                state = self.check_detection(x_max, y_max, w_max, h_max)
-                if state == "DETECT":  # 動体検知していたら識別
+                self.state = self.check_detection(x_max, y_max, w_max, h_max)
+                if self.state == "DETECT":  # 動体検知していたら識別
                     #ToDO: 内部で処理するか、外部で処理すること
                     pass
                 # oldに位置を保存
@@ -105,11 +101,10 @@ class BackgroundSubtractor:
                 self.oldy = 0
                 self.oldw = 0
                 self.oldh = 0
-        self.exist = exist
-        return state #, x_max, y_max, w_max, h_max
+        return self.state , (x_max, y_max, w_max, h_max)
 
     def make_crop(self, frame, x, y, w, h):
-        crop_extend_scale = 2.0
+        crop_extend_scale = 1.2
         height = frame.shape[0]
         width = frame.shape[1]
         if (y + h * crop_extend_scale) < height:
@@ -166,22 +161,11 @@ class BackgroundSubtractor:
         return state
 
     def draw(self, cframe):
-        # 動体の輪郭が最大のものを描画（検知なら白、それ以外は青色）
-        # if self.bframe is not None:
-        #     cframe = cv2.cvtColor(self.bframe, cv2.COLOR_GRAY2BGR)
+        # 検知しているなら動体の輪郭が最大のものを描画
+        if self.state == "DETECT":
+            cframe = cv2.rectangle(cframe, (self.oldx, self.oldy), (self.oldx +
+                                                                    self.oldw, self.oldy + self.oldh), (0, 255, 255),
+                                   2)
 
-        if self.exist is not None:
-            bounding_color = (0, 255, 255)
-        elif self.state == "DETECT":
-            bounding_color = (255, 255, 255)
-        else:
-            bounding_color = (255, 0, 0)
-        cframe = cv2.rectangle(cframe, (self.oldx, self.oldy), (self.oldx +
-                                                       self.oldw, self.oldy + self.oldh), bounding_color, 2)
-        if hasattr(self, "draw_frame"):
-            # draw_frameを重ね合わせ（黒以外を置き換える）
-            drawfilter = np.where((self.draw_frame[:, :, 0] != 0) | (
-                self.draw_frame[:, :, 1] != 0) | (self.draw_frame[:, :, 2] != 0))
-            cframe[drawfilter] = self.draw_frame[drawfilter]
 
         return cframe

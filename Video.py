@@ -39,15 +39,16 @@ class Video():
         self.detect_bottom = self.height
         self.curpos = 0
         self.bounding = True
+        self.crop = True
         self.verbose = True
         self.state = "NODETECT"  # 検知中かどうか
-        self.stateBS = "NODETECT"  # bsの検知状況.jpg書き出しのため
         self.INTERVAL = 0  # self.FPS*10 # 検知間隔フレーム数(10秒、記録が連続になるように)
         self.interval_count = 0  # 検知間隔のカウント
         self.BEFORE_VIDEO_LENGTH = self.FPS * 10  # 検知前の動画を保存するフレーム数(10秒)
         self.AFTER_VIDEO_LENGTH = self.FPS * 5  # 検知後の動画を保存するフレーム数(5秒)
         self.video_count = -1  # 動画保存の残りフレーム数
         self.frames = []  # 検知前の動画を一時的に保存しておく
+        self.bboxes = []  # 検知エリアを一時的に保存しておく
         self.times = []  # fps計算のため現在時刻を一時的に保存しておく
         self.states = []  # bsの検知状況を一時的に保存しておく.jpg書き出しのため
         self.writing = False  # 検知して動画を書き込み中かどうか
@@ -88,9 +89,9 @@ class Video():
     def process_nextframe(self):
         u"""ビデオフレーム読み込み＆処理."""
         self.state = "NODETECT"
-        self.stateBS = "NODETECT"
         self.cursec = int(self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
         self.curpos = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        bbox = None
         ok, frame = self.cap.read()
         if not ok:
             return False, False
@@ -124,8 +125,8 @@ class Video():
             self.interval_count -= 1
         else:
             self.interval_count = self.INTERVAL
-            self.state = self.bs.detect(gframe)
-            self.stateBS = self.state
+            self.state,bbox = self.bs.detect(gframe)
+            bbox = (np.array(bbox) / self.imgscale).astype(np.int32)
 
         # ログ表示
         if self.verbose and self.state == "DETECT":
@@ -142,22 +143,25 @@ class Video():
         ##########
         # 表示処理
         ##########
-        # 検知範囲を描画（赤色）
-        if self.bounding:
-            # 検知表示
-            if self.detecttype == "detectA":
-                img = self.bs.draw(rframe)
-            # 差分表示
-            if self.detecttype == "detectB":
-                img = cv2.cvtColor(bframe, cv2.COLOR_GRAY2BGR)
-            # 処理画像グレー表示
-            if self.detecttype == "detectC":
-                img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
+        # 検知表示
+        if self.detecttype == "detectA":
+            img = self.bs.draw(rframe)
+        # 差分表示
+        if self.detecttype == "detectB":
+            img = cv2.cvtColor(bframe, cv2.COLOR_GRAY2BGR)
+        # 処理画像グレー表示
+        if self.detecttype == "detectC":
+            img = cv2.cvtColor(gframe, cv2.COLOR_GRAY2BGR)
+        cv2.rectangle(img, (self.detect_left, self.detect_top), (
+            self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
 
-            cv2.rectangle(img, (self.detect_left, self.detect_top), (
-                self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
-        else:
-            img = rframe
+        # 出力画像に検知範囲を描画する場合
+        if self.bounding:
+            if self.state == "DETECT":
+                cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] +bbox[2],bbox[1]+bbox[3]),(0, 255, 255),2)
+            cv2.rectangle(frame, (int(self.detect_left/self.imgscale), int(self.detect_top/self.imgscale)), (
+                int(self.detect_right/self.imgscale) - 2, int(self.detect_bottom/self.imgscale) - 2), (0, 0, 255), 2)
+
 
         # ウェブカメの場合反転（内向きカメラ用）
         # if self.webcam:
@@ -169,9 +173,11 @@ class Video():
         # 最新フレーム(数秒)を一時的に保存
         self.frames.append(self.frame)
         self.times.append(cv2.getTickCount())
-        self.states.append(self.stateBS) #BSでの検知状況.jpg書き出し用
+        self.states.append(self.state) #BSでの検知状況.jpg書き出し用
+        self.bboxes.append(bbox)
         if len(self.frames) > self.BEFORE_VIDEO_LENGTH + self.AFTER_VIDEO_LENGTH:
             del self.frames[0]
+            del self.bboxes[0]
             del self.times[0]
             del self.states[0]
         # 進行状況表示
@@ -229,7 +235,7 @@ class Video():
                     h = math.floor(self.cursec / 3600)
                     m = math.floor(self.cursec / 60)
                     s = self.cursec - h * 3600 - m * 60
-                    filename = "{}_{}h{}m{}s.mov".format(splitext(basename(self.playfile))[
+                    filename = "{0}_{1:02d}h{2:02d}m{3:03d}s.mov".format(splitext(basename(self.playfile))[
                         0], h, m, s)
                     fps = self.FPS
 
@@ -253,6 +259,8 @@ class Video():
             idx = [i for i, x in enumerate(self.states) if x == "DETECT"]
             # 最初のフレームだけ
             #idx = [self.states.index("DETECT")]
+            # 最後のフレームだけ
+            idx = [idx[-1]]
             for i, x in enumerate(idx):
                 if self.webcam:
                     self.webcam_savetime = dt.strftime('%Y%m%d_%H%M%S')
@@ -264,12 +272,15 @@ class Video():
                     h = math.floor(self.cursec / 3600)
                     m = math.floor(self.cursec / 60)
                     s = self.cursec - h * 3600 - m * 60
-                    filename = "{0}_{1}h{2}m{3}s_{4:02d}.jpg".format(
+                    filename = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}.jpg".format(
                         splitext(basename(self.playfile))[0], h, m, s, i)
-                    filename_crop = "{0}_{1}h{2}m{3}s_{4:02d}_crop.jpg".format(
+                    filename_crop = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}_crop.jpg".format(
                         splitext(basename(self.playfile))[0], h, m, s, i)
 
                 # opencv3(+python3)だと日本語(cp932)だめ
+                #cv2.imwrite(outfile, self.frame)
+                #cv2.imwrite(outfile_crop, self.crop_frame)
+
                 # https://github.com/opencv/opencv/issues/4292
                 # とりあえずimencodeで代替策
                 outfile = join(self.outdir, filename)
@@ -277,9 +288,18 @@ class Video():
                     ret, buf = cv2.imencode('.jpg', self.frames[x], [
                                             int(cv2.IMWRITE_JPEG_QUALITY), 90])
                     f.write(np.array(buf).tostring())
-                #outfile_crop = join(self.outdir, filename_crop)
-                #cv2.imwrite(outfile, self.frame)
-                #cv2.imwrite(outfile_crop, self.crop_frame)
+
+                # クロップ画像
+                if self.crop:
+                    bbox = self.bboxes[x]
+                    crop_frame = self.bs.make_crop(self.frames[x], bbox[0], bbox[1], bbox[2], bbox[3])
+                    outfile_crop = join(self.outdir, filename_crop)
+                    with open(outfile_crop, 'wb') as f:
+                        ret, buf = cv2.imencode('.jpg', crop_frame, [
+                            int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                        f.write(np.array(buf).tostring())
+
+
 
     def check_webcam(self):
         u"""Webcamがあるか確認"""
@@ -325,6 +345,10 @@ class Video():
     def set_bounding(self, bounding):
         u"""検知領域出力の設定."""
         self.bounding = bounding
+
+    def set_crop(self, crop):
+        u"""検知領域のクロップ設定."""
+        self.crop = crop
 
     def get_framecount(self):
         u"""フレーム数を返す."""
