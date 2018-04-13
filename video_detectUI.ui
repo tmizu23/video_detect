@@ -97,7 +97,7 @@
         <item>
          <widget class="QCheckBox" name="crop_checkBox">
           <property name="text">
-           <string>検知範囲切り抜き（画像書き出し時）</string>
+           <string>学習用txt書き出し（画像書き出し時）</string>
           </property>
          </widget>
         </item>

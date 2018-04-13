@@ -325,7 +325,7 @@ class Ui_MainWindow(object):
         self.writevideo_checkBox.setText(_translate("MainWindow", "検知ビデオ(mov)書き出し"))
         self.writejpg_checkBox.setText(_translate("MainWindow", "検知画像(jpg)書き出し"))
         self.bounding_checkBox.setText(_translate("MainWindow", "検知エリア表示（ビデオ、画像書き出し時）"))
-        self.crop_checkBox.setText(_translate("MainWindow", "検知範囲切り抜き（画像書き出し時）"))
+        self.crop_checkBox.setText(_translate("MainWindow", "学習用txt書き出し（画像書き出し時）"))
         self.display_checkBox.setText(_translate("MainWindow", "モニター表示"))
         self.verbose_checkBox.setText(_translate("MainWindow", "ログ出力"))
         self.label_8.setText(_translate("MainWindow", "表示タイプ"))

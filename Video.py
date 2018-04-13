@@ -79,9 +79,8 @@ class Video():
     def get_currentframe(self, bounding):
         ok, frame = self.cap.read()
         rframe = cv2.resize(frame, (self.width, self.height))
-        if bounding:
-            cv2.rectangle(rframe, (self.detect_left, self.detect_top), (
-                self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
+        cv2.rectangle(rframe, (self.detect_left, self.detect_top), (
+            self.detect_right - 2, self.detect_bottom - 2), (0, 0, 255), 2)
         frame = cv2.cvtColor(rframe, cv2.COLOR_BGR2RGB)
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.curpos)
         return frame
@@ -238,15 +237,17 @@ class Video():
                     filename = "{0}_{1:02d}h{2:02d}m{3:03d}s.mov".format(splitext(basename(self.playfile))[
                         0], h, m, s)
                     fps = self.FPS
-
-                outfile = join(self.outdir, filename)
-                self.videoWriter = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc(
-                    'm', 'p', '4', 'v'), fps, (self.org_width, self.org_height))
-                # 書き出す
-                for v in self.frames:
-                    self.videoWriter.write(v)
-                self.videoWriter.release()
-                self.videoWriter = None
+                try:
+                    outfile = join(self.outdir, filename)
+                    self.videoWriter = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc(
+                        'm', 'p', '4', 'v'), fps, (self.org_width, self.org_height))
+                    # 書き出す
+                    for v in self.frames:
+                        self.videoWriter.write(v)
+                    self.videoWriter.release()
+                    self.videoWriter = None
+                except:
+                    print("writing video error!")
 
     def writeout_jpg(self):
         u"""jpg書き出し."""
@@ -268,6 +269,8 @@ class Video():
                         self.webcam_savetime, i)
                     filename_crop = "webcam{0}_{1:02d}_crop.jpg".format(
                         self.webcam_savetime, i)
+                    filename_txt = "webcam{0}_{1:02d}.txt".format(
+                        self.webcam_savetime, i)
                 else:
                     h = math.floor(self.cursec / 3600)
                     m = math.floor(self.cursec / 60)
@@ -276,6 +279,8 @@ class Video():
                         splitext(basename(self.playfile))[0], h, m, s, i)
                     filename_crop = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}_crop.jpg".format(
                         splitext(basename(self.playfile))[0], h, m, s, i)
+                    filename_txt = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}.txt".format(
+                        splitext(basename(self.playfile))[0], h, m, s, i)
 
                 # opencv3(+python3)だと日本語(cp932)だめ
                 #cv2.imwrite(outfile, self.frame)
@@ -283,21 +288,37 @@ class Video():
 
                 # https://github.com/opencv/opencv/issues/4292
                 # とりあえずimencodeで代替策
-                outfile = join(self.outdir, filename)
-                with open(outfile, 'wb') as f:
-                    ret, buf = cv2.imencode('.jpg', self.frames[x], [
-                                            int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                    f.write(np.array(buf).tostring())
-
-                # クロップ画像
-                if self.crop:
-                    bbox = self.bboxes[x]
-                    crop_frame = self.bs.make_crop(self.frames[x], bbox[0], bbox[1], bbox[2], bbox[3])
-                    outfile_crop = join(self.outdir, filename_crop)
-                    with open(outfile_crop, 'wb') as f:
-                        ret, buf = cv2.imencode('.jpg', crop_frame, [
-                            int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                try:
+                    outfile = join(self.outdir, filename)
+                    with open(outfile, 'wb') as f:
+                        ret, buf = cv2.imencode('.jpg', self.frames[x], [
+                                                int(cv2.IMWRITE_JPEG_QUALITY), 90])
                         f.write(np.array(buf).tostring())
+
+                    # クロップ情報
+                    if self.crop:
+                        bbox = self.bboxes[x]
+                        x = bbox[0]+round(bbox[2]/2)
+                        y = bbox[1]+round(bbox[3]/2)
+                        w = bbox[2]
+                        h = bbox[3]
+                        crop_extend_scale = 1.2
+                        classno = 0
+                        bounding_str = "{} {} {} {} {}".format(classno, x / self.org_width, y / self.org_height,
+                                                               w * crop_extend_scale / self.org_width,
+                                                               h * crop_extend_scale / self.org_height)
+                        outfile_txt = join(self.outdir, filename_txt)
+                        with open(outfile_txt, 'w') as f:
+                            f.write(bounding_str)
+                        # bbox = self.bboxes[x]
+                        # crop_frame = self.bs.make_crop(self.frames[x], bbox[0], bbox[1], bbox[2], bbox[3])
+                        # outfile_crop = join(self.outdir, filename_crop)
+                        # with open(outfile_crop, 'wb') as f:
+                        #     ret, buf = cv2.imencode('.jpg', crop_frame, [
+                        #         int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                        #     f.write(np.array(buf).tostring())
+                except:
+                    print("writing jpg error!")
 
 
 
