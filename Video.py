@@ -48,7 +48,6 @@ class Video():
         self.AFTER_VIDEO_LENGTH = self.FPS * 5  # 検知後の動画を保存するフレーム数(5秒)
         self.video_count = -1  # 動画保存の残りフレーム数
         self.frames = []  # 検知前の動画を一時的に保存しておく
-        self.bboxes = []  # 検知エリアを一時的に保存しておく
         self.times = []  # fps計算のため現在時刻を一時的に保存しておく
         self.states = []  # bsの検知状況を一時的に保存しておく.jpg書き出しのため
         self.writing = False  # 検知して動画を書き込み中かどうか
@@ -57,6 +56,7 @@ class Video():
         self.videoWriter_webcam = None  # webcamの全映像書き出し用オブジェクト
         self.webcam_savetime = None  # webcamの映像保存開始時間
         self.frame = None  # 現在のフレーム画像
+        self.bboxe = None  # 現在の検知エリア
         self.view_frame = None  # 表示用フレーム
         self.crop_frame = None  # 検知エリアの切り出しフレーム
         self.func = logfunc  # GUIにログを通知するための関数（observerモデル）
@@ -88,7 +88,7 @@ class Video():
     def process_nextframe(self):
         u"""ビデオフレーム読み込み＆処理."""
         self.state = "NODETECT"
-        self.cursec = int(self.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
+        self.curmsec = self.cap.get(cv2.CAP_PROP_POS_MSEC)
         self.curpos = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
         bbox = None
         ok, frame = self.cap.read()
@@ -134,11 +134,12 @@ class Video():
                 print(
                     "\n    detect! --> animal:{} {}".format("webcam", timestr))
             else:
-                h = math.floor(self.cursec / 3600)
-                m = math.floor(self.cursec / 60)
-                s = self.cursec - h * 3600 - m * 60
+                cursec = self.curmsec / 1000
+                h = math.floor(cursec / 3600)
+                m = math.floor((cursec - h * 3600) / 60)
+                s = cursec - h * 3600 - m * 60
                 print(
-                    "\n    detect! --> animal: {} {}h{}m{}s".format(basename(self.playfile), h, m, s))
+                    "\n    detect! --> animal: {0} {1:02d}h{2:02d}m{3:04.1f}s".format(basename(self.playfile), h, m, s))
         ##########
         # 表示処理
         ##########
@@ -167,16 +168,15 @@ class Video():
         #    rframe = cv2.flip(rframe, 1)
 
         self.frame = frame  # 書き出し用
+        self.bbox = bbox  #書き出し用
         self.view_frame = img  # 表示用
         #cv2.imshow("debug",self.view_frame)
         # 最新フレーム(数秒)を一時的に保存
         self.frames.append(self.frame)
         self.times.append(cv2.getTickCount())
         self.states.append(self.state) #BSでの検知状況.jpg書き出し用
-        self.bboxes.append(bbox)
         if len(self.frames) > self.BEFORE_VIDEO_LENGTH + self.AFTER_VIDEO_LENGTH:
             del self.frames[0]
-            del self.bboxes[0]
             del self.times[0]
             del self.states[0]
         # 進行状況表示
@@ -231,10 +231,11 @@ class Video():
                     fps = round(
                         len(self.frames) / ((self.times[-1] - self.times[0]) / cv2.getTickFrequency()), 1)
                 else:
-                    h = math.floor(self.cursec / 3600)
-                    m = math.floor(self.cursec / 60)
-                    s = self.cursec - h * 3600 - m * 60
-                    filename = "{0}_{1:02d}h{2:02d}m{3:03d}s.mov".format(splitext(basename(self.playfile))[
+                    cursec = self.curmsec / 1000
+                    h = math.floor(cursec / 3600)
+                    m = math.floor((cursec - h * 3600) / 60)
+                    s = cursec - h * 3600 - m * 60
+                    filename = "{0}_{1:02d}h{2:02d}m{3:03.1f}s.mov".format(splitext(basename(self.playfile))[
                         0], h, m, s)
                     fps = self.FPS
                 try:
@@ -256,69 +257,66 @@ class Video():
             dt = datetime.datetime.now()
             if not os.path.exists(self.outdir):
                 os.makedirs(self.outdir)
-            # フレーム全体なら
-            idx = [i for i, x in enumerate(self.states) if x == "DETECT"]
-            # 最初のフレームだけ
-            #idx = [self.states.index("DETECT")]
-            # 最後のフレームだけ
-            idx = [idx[-1]]
-            for i, x in enumerate(idx):
-                if self.webcam:
-                    self.webcam_savetime = dt.strftime('%Y%m%d_%H%M%S')
-                    filename = "webcam{0}_{1:02d}.jpg".format(
-                        self.webcam_savetime, i)
-                    filename_crop = "webcam{0}_{1:02d}_crop.jpg".format(
-                        self.webcam_savetime, i)
-                    filename_txt = "webcam{0}_{1:02d}.txt".format(
-                        self.webcam_savetime, i)
-                else:
-                    h = math.floor(self.cursec / 3600)
-                    m = math.floor(self.cursec / 60)
-                    s = self.cursec - h * 3600 - m * 60
-                    filename = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}.jpg".format(
-                        splitext(basename(self.playfile))[0], h, m, s, i)
-                    filename_crop = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}_crop.jpg".format(
-                        splitext(basename(self.playfile))[0], h, m, s, i)
-                    filename_txt = "{0}_{1:02d}h{2:02d}m{3:02d}s_{4:02d}.txt".format(
-                        splitext(basename(self.playfile))[0], h, m, s, i)
 
-                # opencv3(+python3)だと日本語(cp932)だめ
-                #cv2.imwrite(outfile, self.frame)
-                #cv2.imwrite(outfile_crop, self.crop_frame)
 
-                # https://github.com/opencv/opencv/issues/4292
-                # とりあえずimencodeで代替策
-                try:
-                    outfile = join(self.outdir, filename)
-                    with open(outfile, 'wb') as f:
-                        ret, buf = cv2.imencode('.jpg', self.frames[x], [
-                                                int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                        f.write(np.array(buf).tostring())
+            if self.webcam:
+                self.webcam_savetime = dt.strftime('%Y%m%d_%H%M%S')
+                filename = "webcam{0}.jpg".format(
+                    self.webcam_savetime)
+                # filename_crop = "webcam{0}_crop.jpg".format(
+                #     self.webcam_savetime)
+                filename_txt = "webcam{0}.txt".format(
+                    self.webcam_savetime)
+            else:
+                cursec = self.curmsec / 1000
+                h = math.floor(cursec / 3600)
+                m = math.floor((cursec - h * 3600) / 60)
+                s = cursec - h * 3600 - m * 60
 
-                    # クロップ情報
-                    if self.crop:
-                        bbox = self.bboxes[x]
-                        x = bbox[0]+round(bbox[2]/2)
-                        y = bbox[1]+round(bbox[3]/2)
-                        w = bbox[2]
-                        h = bbox[3]
-                        crop_extend_scale = 1.2
-                        classno = 0
-                        bounding_str = "{} {} {} {} {}".format(classno, x / self.org_width, y / self.org_height,
-                                                               w * crop_extend_scale / self.org_width,
-                                                               h * crop_extend_scale / self.org_height)
-                        outfile_txt = join(self.outdir, filename_txt)
-                        with open(outfile_txt, 'w') as f:
-                            f.write(bounding_str)
-                        # bbox = self.bboxes[x]
-                        # crop_frame = self.bs.make_crop(self.frames[x], bbox[0], bbox[1], bbox[2], bbox[3])
-                        # outfile_crop = join(self.outdir, filename_crop)
-                        # with open(outfile_crop, 'wb') as f:
-                        #     ret, buf = cv2.imencode('.jpg', crop_frame, [
-                        #         int(cv2.IMWRITE_JPEG_QUALITY), 90])
-                        #     f.write(np.array(buf).tostring())
-                except:
-                    print("writing jpg error!")
+                filename = "{0}_{1:02d}h{2:02d}m{3:04.1f}s.jpg".format(
+                    splitext(basename(self.playfile))[0], h, m, s)
+                # filename_crop = "{0}_{1:02d}h{2:02d}m{3:02.1f}s_crop.jpg".format(
+                #     splitext(basename(self.playfile))[0], h, m, s)
+                filename_txt = "{0}_{1:02d}h{2:02d}m{3:04.1f}s.txt".format(
+                    splitext(basename(self.playfile))[0], h, m, s)
+
+            # opencv3(+python3)だと日本語(cp932)だめ
+            #cv2.imwrite(outfile, self.frame)
+            #cv2.imwrite(outfile_crop, self.crop_frame)
+
+            # https://github.com/opencv/opencv/issues/4292
+            # とりあえずimencodeで代替策
+            try:
+                outfile = join(self.outdir, filename)
+                with open(outfile, 'wb') as f:
+                    ret, buf = cv2.imencode('.jpg', self.frame, [
+                                            int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                    f.write(np.array(buf).tostring())
+
+                # クロップ情報
+                if self.crop:
+                    bbox = self.bbox
+                    x = bbox[0]+round(bbox[2]/2)
+                    y = bbox[1]+round(bbox[3]/2)
+                    w = bbox[2]
+                    h = bbox[3]
+                    crop_extend_scale = 1.2
+                    classno = 0
+                    bounding_str = "{} {} {} {} {}".format(classno, x / self.org_width, y / self.org_height,
+                                                           w * crop_extend_scale / self.org_width,
+                                                           h * crop_extend_scale / self.org_height)
+                    outfile_txt = join(self.outdir, filename_txt)
+                    with open(outfile_txt, 'w') as f:
+                        f.write(bounding_str)
+                    # bbox = self.bbox
+                    # crop_frame = self.bs.make_crop(self.frame, bbox[0], bbox[1], bbox[2], bbox[3])
+                    # outfile_crop = join(self.outdir, filename_crop)
+                    # with open(outfile_crop, 'wb') as f:
+                    #     ret, buf = cv2.imencode('.jpg', crop_frame, [
+                    #         int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                    #     f.write(np.array(buf).tostring())
+            except:
+                print("writing jpg error!")
 
 
 
