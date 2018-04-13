@@ -546,7 +546,7 @@ class CuiController():
         self.playfile = None
         self.pause = True
         # コマンドライン引数取得
-        args = docopt(__doc__, version="0.1.2")
+        args = docopt(__doc__, version="1.0beta")
         self.settei.load_cui_settings(args)
         if self.settei.settings["webcam"]:  # カメラ入力
             print("Input from webcam...")

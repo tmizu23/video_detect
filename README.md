@@ -1,4 +1,4 @@
-動体検知ソフト　ver0.02
+動体検知ソフト　ver1.0beta
 ======================
 これはビデオ映像に動体が映っているかどうかをチェックするソフトです。
 
@@ -7,14 +7,12 @@
 
 1. WinPythonをダウンロード  
   https://sourceforge.net/projects/winpython/files/WinPython_3.6/3.6.5.0/
-2. OpenCV+contlib(whlパッケージ)をダウンロード  
-  http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
-3. WinPythonのコマンドプロンプトを起動  
+2. WinPythonのコマンドプロンプトを起動  
   展開してWinPython Command Prompt.exeを起動
-4. OpenCVのインストール  
+3. OpenCVのインストール  
     コマンドプロンプトで  
-    pip install [file]
-
+    pip install opencv-contrlib-python  
+    
 実行
 ------
     python video_detect.py
@@ -41,6 +39,12 @@ uiの変換
 - pyuic5 video_detectUI.ui -o video_detectUI.py
 - pyrcc5 video_detect.qrc -o video_detect_rc.py
 
+exe化  
+
+https://qiita.com/matsu_mh/items/789ae0fa7bfacbdc5829
+
+- pip install pyinstaller
+- pyinstaller video_detect.py --onefile --add-data opencv_ffmpeg340_64.dll;. 
 
 変更履歴
 ------

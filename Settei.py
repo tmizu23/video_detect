@@ -5,7 +5,7 @@ from os.path import join
 import codecs
 import json
 from collections import OrderedDict
-from MyUtil import get_actual_filename,find_rootdir
+from MyUtil import get_actual_filename,find_rootdir,find_exedir
 
 class Settei():
     u"""処理設定用クラス."""
@@ -15,8 +15,8 @@ class Settei():
         self.settings = OrderedDict([
             ("webcam", False),
             ("device", 0),
-            ("playdir", get_actual_filename(find_rootdir())),
-            ("outdir", get_actual_filename(find_rootdir())),
+            ("playdir", get_actual_filename(find_exedir())),
+            ("outdir", get_actual_filename(find_exedir())),
             ("avi", True),
             ("mov", True),
             ("mpg", True),

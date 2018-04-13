@@ -343,9 +343,10 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         self.treeView.selectionModel().select(
             index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
         self.trackSlider.setMaximum(framecount)
-        d = datetime.timedelta(seconds=int(
-            framecount / fps))
-        self.trackalllabel.setText(str(d))
+        if fps != 0:
+            d = datetime.timedelta(seconds=int(
+                framecount / fps))
+            self.trackalllabel.setText(str(d))
 
         self.trackSlider.setValue(0)
         self.pixmap.fill(QtCore.Qt.black)
