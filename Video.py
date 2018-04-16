@@ -201,7 +201,7 @@ class Video():
             self.webcam_savetime = datetime.datetime.now()
             filename = "ALLwebcam" + \
                 self.webcam_savetime.strftime('%Y%m%d_%H%M%S') + '.mov'
-            outfile = join(self.outdir, filename)
+            outfile = str(Path(self.outdir) / filename)
             self.videoWriter_webcam = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc(
                 'm', 'p', '4', 'v'), self.FPS, (self.width, self.height))
         else:
@@ -239,7 +239,7 @@ class Video():
                         0], h, m, s)
                     fps = self.FPS
                 try:
-                    outfile = join(self.outdir, filename)
+                    outfile = str(Path(self.outdir) / filename)
                     self.videoWriter = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc(
                         'm', 'p', '4', 'v'), fps, (self.org_width, self.org_height))
                     # 書き出す
@@ -287,7 +287,7 @@ class Video():
             # https://github.com/opencv/opencv/issues/4292
             # とりあえずimencodeで代替策
             try:
-                outfile = join(self.outdir, filename)
+                outfile = Path(self.outdir) / filename
                 with open(outfile, 'wb') as f:
                     ret, buf = cv2.imencode('.jpg', self.frame, [
                                             int(cv2.IMWRITE_JPEG_QUALITY), 90])
@@ -305,12 +305,12 @@ class Video():
                     bounding_str = "{} {} {} {} {}".format(classno, x / self.org_width, y / self.org_height,
                                                            w * crop_extend_scale / self.org_width,
                                                            h * crop_extend_scale / self.org_height)
-                    outfile_txt = join(self.outdir, filename_txt)
+                    outfile_txt = Path(self.outdir) / filename_txt
                     with open(outfile_txt, 'w') as f:
                         f.write(bounding_str)
                     # bbox = self.bbox
                     # crop_frame = self.bs.make_crop(self.frame, bbox[0], bbox[1], bbox[2], bbox[3])
-                    # outfile_crop = join(self.outdir, filename_crop)
+                    # outfile_crop = Path(self.outdir) / filename_crop
                     # with open(outfile_crop, 'wb') as f:
                     #     ret, buf = cv2.imencode('.jpg', crop_frame, [
                     #         int(cv2.IMWRITE_JPEG_QUALITY), 90])
