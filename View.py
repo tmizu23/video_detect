@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from PyQt5 import QtCore, QtGui, QtWidgets
 from video_detectUI import Ui_MainWindow
-import os
 import datetime
+from pathlib import Path
 
 class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
     u"""GUIのクラス."""
@@ -274,13 +274,13 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         u"""出力フォルダを返す."""
         outdir = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select Output folder")
-        return outdir.replace('/', os.sep)
+        return str(Path(outdir))
 
     def get_playdir(self):
         u"""再生ビデオフォルダ選択.プレイリストをセット."""
         playdir = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select folder")
-        return playdir.replace('/', os.sep)
+        return str(Path(playdir))
 
     def get_device(self):
         u"""カメラデバイスを選択.0 or 1."""
@@ -320,8 +320,7 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
                 dirlist = self.get_playlist(model.filePath(child))
                 playlist.extend(dirlist)
             else:
-                playlist.append(str(model.filePath(
-                    child)).replace('/', os.sep))
+                playlist.append(str(Path(model.filePath(child))))
 
         return playlist
 
@@ -358,7 +357,7 @@ class MainView(QtWidgets.QMainWindow,Ui_MainWindow):
         u"""ツリービューから選択されたファイルを返す."""
         model = self.treeView.model()
         indexItem = model.index(index.row(), 0, index.parent())
-        filename = model.filePath(indexItem).replace('/', os.sep)
+        filename = str(Path(model.filePath(indexItem)))
         return filename
 
     def set_webcam_view(self, webcam=True):

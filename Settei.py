@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-import os
 import sys
 from os.path import join
 import codecs
 import json
 from collections import OrderedDict
-from MyUtil import get_actual_filename,find_rootdir,find_exedir
+from MyUtil import find_exedir
+from pathlib import Path
 
 class Settei():
     u"""処理設定用クラス."""
@@ -15,8 +15,8 @@ class Settei():
         self.settings = OrderedDict([
             ("webcam", False),
             ("device", 0),
-            ("playdir", get_actual_filename(find_exedir())),
-            ("outdir", get_actual_filename(find_exedir())),
+            ("playdir", find_exedir()),
+            ("outdir", find_exedir()),
             ("avi", True),
             ("mov", True),
             ("mpg", True),
@@ -42,20 +42,20 @@ class Settei():
     def load_cui_settings(self, args):
         u"""コマンドライン引数の読み込み."""
         if args["--settings"]:
-            if not os.path.exists(args["--settings"]):
+            if not Path(args["--settings"]).exists():
                 print("Setting file is not exist.")
                 sys.exit()
             self.load_settings(args["--settings"])
         if args["--inpdir"]:
             inpdir = args["--inpdir"]
-            self.settings["playdir"] = inpdir.replace('/', os.sep)
-            if not os.path.exists(inpdir):
+            self.settings["playdir"] = str(Path(inpdir))
+            if not Path(inpdir).exists():
                 print("Input folder is not exist.")
                 sys.exit()
         if args["--outdir"]:
             outdir = args["--outdir"]
-            self.settings["outdir"] = outdir.replace('/', os.sep)
-            if not os.path.exists(outdir):
+            self.settings["outdir"] = str(Path(outdir))
+            if not Path(outdir).exists():
                 print("Ouput folder is not exist.")
                 sys.exit()
         if args["--debug"]:
@@ -63,22 +63,20 @@ class Settei():
 
     def load_settings(self, setting_file):
         u"""設定ファイル（settings.json）の読み込み."""
-        if os.path.exists(setting_file):
+        if Path(setting_file).exists():
             f = codecs.open(setting_file, 'r', 'utf-8')  # 書き込みモードで開く
             self.settings = json.load(f)
             # outdirとplaydirの存在確認
             outdir = self.settings["outdir"]
-            if not os.path.exists(outdir):
-                self.settings["outdir"] = get_actual_filename(
-                    find_rootdir())
+            if not Path(outdir).exists():
+                self.settings["outdir"] = find_exedir()
             playdir = self.settings["playdir"]
-            if not os.path.exists(playdir):
-                self.settings["playdir"] = get_actual_filename(
-                    find_rootdir())
+            if not Path(playdir).exists():
+                self.settings["playdir"] = find_exedir()
 
     def save_settings(self, setting_file):
         u"""設定ファイルの書き出し."""
-        inidir = get_actual_filename(find_rootdir())
+        inidir = find_exedir()
         f = codecs.open(join(inidir, setting_file),
                         'w', 'utf-8')  # 書き込みモードで開く
         json.dump(self.settings, f, indent=2,

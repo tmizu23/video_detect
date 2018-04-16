@@ -25,12 +25,13 @@ Examples:
 from docopt import docopt
 import sys
 import os
-from os.path import join, splitext, basename
+from os.path import splitext, basename
 from PyQt5 import QtCore, QtGui, QtWidgets
 from View import MainView
 from Settei import Settei
 from Video import Video
-from MyUtil import find_rootdir
+from MyUtil import find_exedir
+from pathlib import Path
 
 class MainController():
     u"""処理クラス."""
@@ -48,8 +49,8 @@ class MainController():
         self.pause = True
         self.mouseselectmode = False
         u"""設定の読み込み."""
-        inidir = os.path.abspath(find_rootdir())
-        setting_file = join(inidir, "settings.json")
+        inidir = find_exedir()
+        setting_file = Path(inidir) / "settings.json"
         self.load_settings(setting_file)
         # GUIのアクション設定（設定読み込みの後に実行）
         self.set_actions()
@@ -254,7 +255,7 @@ class MainController():
     def select_playfile_treeview(self, index):
         u"""ツリービューから選択されたファイルを再生ビデオに設定."""
         playfile = self.main_view.get_filename_treeview(index)
-        if os.path.isfile(playfile):  # directoryなら何もしない
+        if Path(playfile).exists():  # directoryなら何もしない
             playnumber = self.playlist.index(playfile)
             self.playnumber = playnumber
             self.playfile = playfile
@@ -290,9 +291,9 @@ class MainController():
 
     def get_recursive_outdir(self, outdir, playdir, playfile):
         u"""playfileのフォルダ構成を考慮したビデオ＆画像出力フォルダ."""
-        tmppath = outdir + os.sep + playfile.replace(playdir, "").lstrip(
+        tmppath = Path(outdir) / playfile.replace(playdir, "").lstrip(
             '\\')  # playdirがG:\とかだとバックスラッシュが取れるためos.sep追加。取れない場合のために左のバックスラッシュを一旦とる。
-        recursive_outdir = os.path.dirname(str(tmppath))
+        recursive_outdir = str(tmppath.parent)
         return recursive_outdir
 
     def set_video(self, playfile):
@@ -561,7 +562,7 @@ class CuiController():
                     sys.exit()
         else:  # ビデオ入力
             playdir = self.settei.settings["playdir"]
-            if os.path.exists(playdir):
+            if Path(playdir).exists():
                 self.playlist = self.get_playlist(playdir)
                 if len(self.playlist) > 0:
                     # プレイリストのビデオに対してチェック
@@ -581,7 +582,7 @@ class CuiController():
         print(playfile)
         tmppath = self.settei.settings[
             "outdir"] + playfile.replace(self.settei.settings["playdir"], "")
-        recursive_outdir = os.path.dirname(tmppath)
+        recursive_outdir = str(Path(tmppath).parent)
         self.playfile = playfile
         self.video = Video(playfile, recursive_outdir)
         self.video.set_bounding(

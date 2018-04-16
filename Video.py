@@ -4,9 +4,9 @@ import numpy as np
 import os
 import math
 import datetime
-from os.path import join, splitext, basename
+from os.path import splitext, basename
 from BackgroundSubtractor import BackgroundSubtractor
-
+from pathlib import Path
 
 class Video():
     u"""ビデオ解析用クラス.背景差分法により動体を抽出する.フレーム間での動体の動き方によって
@@ -224,7 +224,7 @@ class Video():
                 self.waiting = True
             if self.video_count < 0:  # 待ち時間終了
                 self.waiting = False
-                if not os.path.exists(self.outdir):
+                if not Path(self.outdir).exists():
                     os.makedirs(self.outdir)
                 if self.webcam:
                     filename = "webcam" + datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.mov'
@@ -255,7 +255,7 @@ class Video():
         # 検知したら書き出し
         if self.state == "DETECT":
             dt = datetime.datetime.now()
-            if not os.path.exists(self.outdir):
+            if not Path(self.outdir).exists():
                 os.makedirs(self.outdir)
 
 
